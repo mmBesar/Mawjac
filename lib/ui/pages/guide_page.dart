@@ -170,7 +170,7 @@ class _GuidePageState extends State<GuidePage> {
     final channels = _favoritesOnly && state.favorites.isNotEmpty
         ? state.favorites
         : state.channels;
-    final windowEnd = _windowStart.add(const Duration(minutes: _spanMinutes));
+    final windowEnd = _windowStart.add(Duration(minutes: _spanMinutes));
     final use24 = state.settings.use24HourTime;
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
     final gridWidth = _spanMinutes * _zoom;

@@ -16,8 +16,8 @@ import '../widgets/channel_row.dart';
 import '../widgets/channel_tile.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_banner.dart';
-import '../widgets/warnings_panel.dart';
 import '../widgets/source_switcher.dart';
+import '../widgets/warnings_panel.dart';
 import '../widgets/wave.dart';
 import 'channel_guide_page.dart';
 
