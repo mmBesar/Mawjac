@@ -268,6 +268,7 @@ class AppSettings {
     this.videoOutput = 'auto',
     this.useMpvConfig = false,
     this.startFullscreen = false,
+    this.mpvPath = '',
   });
 
   factory AppSettings.defaults() => const AppSettings(
@@ -299,6 +300,9 @@ class AppSettings {
   /// Open the mpv window fullscreen.
   final bool startFullscreen;
 
+  /// Optional path to the mpv executable; empty means look in PATH.
+  final String mpvPath;
+
   AppSettings copyWith({
     ThemeFamily? themeFamily,
     ThemeAccent? accent,
@@ -310,6 +314,7 @@ class AppSettings {
     String? videoOutput,
     bool? useMpvConfig,
     bool? startFullscreen,
+    String? mpvPath,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -324,6 +329,7 @@ class AppSettings {
       videoOutput: videoOutput ?? this.videoOutput,
       useMpvConfig: useMpvConfig ?? this.useMpvConfig,
       startFullscreen: startFullscreen ?? this.startFullscreen,
+      mpvPath: mpvPath ?? this.mpvPath,
     );
   }
 
@@ -338,6 +344,7 @@ class AppSettings {
         'videoOutput': videoOutput,
         'useMpvConfig': useMpvConfig,
         'startFullscreen': startFullscreen,
+        'mpvPath': mpvPath,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -364,6 +371,7 @@ class AppSettings {
       videoOutput: json['videoOutput'] as String? ?? 'auto',
       useMpvConfig: json['useMpvConfig'] as bool? ?? false,
       startFullscreen: json['startFullscreen'] as bool? ?? false,
+      mpvPath: json['mpvPath'] as String? ?? '',
     );
   }
 }

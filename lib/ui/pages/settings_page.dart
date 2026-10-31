@@ -615,6 +615,18 @@ class _PlayerSettings extends StatelessWidget {
                               capabilities.bundled,
                             ),
                 ),
+                _MpvPathField(
+                  initial: settings.mpvPath,
+                  label: strings.mpvPathLabel,
+                  hint: strings.mpvPathHint,
+                  apply: strings.apply,
+                  onApply: (value) {
+                    MpvRuntime.useCustomPath(value);
+                    unawaited(
+                      state.updateSettings(settings.copyWith(mpvPath: value)),
+                    );
+                  },
+                ),
                 SwitchListTile(
                   value: enabled && settings.useMpvWindow,
                   onChanged: enabled
@@ -712,6 +724,65 @@ class _PlayerSettings extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+
+class _MpvPathField extends StatefulWidget {
+  const _MpvPathField({
+    required this.initial,
+    required this.label,
+    required this.hint,
+    required this.apply,
+    required this.onApply,
+  });
+
+  final String initial;
+  final String label;
+  final String hint;
+  final String apply;
+  final ValueChanged<String> onApply;
+
+  @override
+  State<_MpvPathField> createState() => _MpvPathFieldState();
+}
+
+class _MpvPathFieldState extends State<_MpvPathField> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: TextField(
+              controller: _controller,
+              autocorrect: false,
+              textDirection: TextDirection.ltr,
+              decoration: InputDecoration(
+                labelText: widget.label,
+                hintText: widget.hint,
+              ),
+              onSubmitted: widget.onApply,
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilledButton(
+            onPressed: () => widget.onApply(_controller.text),
+            child: Text(widget.apply),
+          ),
+        ],
+      ),
     );
   }
 }

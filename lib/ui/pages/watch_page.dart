@@ -4,21 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/bidi.dart';
+import '../../core/platform.dart';
 import '../../core/theme.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../l10n/strings.dart';
 import '../player_page.dart';
-import '../../core/platform.dart';
-import '../widgets/channel_tile.dart';
-import 'channel_guide_page.dart';
 import '../widgets/channel_art.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/channel_row.dart';
+import '../widgets/channel_tile.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/warnings_panel.dart';
 import '../widgets/wave.dart';
+import 'channel_guide_page.dart';
 
 /// The home screen: what is on now, then every channel.
 class WatchPage extends StatefulWidget {

@@ -9,11 +9,11 @@ import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../l10n/strings.dart';
 import '../player_page.dart';
-import 'channel_guide_page.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/programme_sheet.dart';
 import '../widgets/warnings_panel.dart';
+import 'channel_guide_page.dart';
 
 /// A twelve-hour timeline. The channel column stays put while the programmes
 /// scroll sideways, and both scroll up and down together.

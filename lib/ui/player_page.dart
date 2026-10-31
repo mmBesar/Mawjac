@@ -33,9 +33,17 @@ Future<void> openPlayer(BuildContext context, Channel channel) async {
   final navigator = Navigator.of(context);
   Widget page = PlayerPage(channel: channel);
   if (kIsDesktop && state.settings.useMpvWindow) {
+    MpvRuntime.useCustomPath(state.settings.mpvPath);
     final capabilities = await MpvRuntime.capabilities();
     if (capabilities != null) {
       page = NowPlayingPage(channel: channel, capabilities: capabilities);
+    } else if (context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(context.strings.mpvMissing),
+          duration: const Duration(seconds: 8),
+        ),
+      );
     }
   }
   await navigator.push<void>(
@@ -1395,6 +1403,7 @@ class PlayerInfoPanel extends StatelessWidget {
 /// A row of channel logos for switching without leaving the player.
 class PlayerChannelStrip extends StatefulWidget {
   const PlayerChannelStrip({
+    super.key,
     required this.channels,
     required this.current,
     required this.allowInsecure,

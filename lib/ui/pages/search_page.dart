@@ -9,11 +9,11 @@ import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../l10n/strings.dart';
 import '../player_page.dart';
-import 'channel_guide_page.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/channel_row.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/programme_sheet.dart';
+import 'channel_guide_page.dart';
 
 /// Finds channels by name, number or group, and programmes by title,
 /// sub-title or category.

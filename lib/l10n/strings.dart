@@ -467,8 +467,12 @@ class AppStrings {
       ? '${bundled ? 'مضمّن' : 'من النظام'} · $version'
       : '${bundled ? 'Bundled' : 'System'} · $version';
   String get mpvMissing => isArabic
-      ? 'لم يوجد mpv؛ سيُستخدم المشغّل المدمج. ثبّت حزمة mpv أو عيّن MAWJAC_MPV.'
-      : 'mpv was not found, so the built-in player is used. Install mpv or set MAWJAC_MPV.';
+      ? 'mpv غير مثبّت أو غير موجود، لذا يُستخدم المشغّل المدمج. ثبّت حزمة mpv أو حدّد مساره في الإعدادات.'
+      : 'mpv was not found, so the built-in player is used. Install mpv (for example sudo apt install mpv, or add it to your NixOS packages) or set its path in Settings.';
+  String get mpvPathLabel =>
+      isArabic ? 'مسار mpv (اختياري)' : 'mpv path (optional)';
+  String get mpvPathHint => isArabic ? '/usr/bin/mpv' : '/usr/bin/mpv';
+  String get apply => isArabic ? 'تطبيق' : 'Apply';
   String get today => isArabic ? 'اليوم' : 'Today';
   String get tomorrow => isArabic ? 'غدًا' : 'Tomorrow';
   String get noUpcoming =>

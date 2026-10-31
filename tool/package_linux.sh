@@ -154,23 +154,6 @@ bundle_runtime_libraries() {
     ln -sfn libmpv.so.2 "$libdir/libmpv.so"
   fi
 
-  # Ship the mpv executable too. Desktop playback runs it as its own native
-  # window (Wayland cannot embed mpv in another window), so the AppImage must
-  # not depend on the host having mpv installed. The app finds it at bin/mpv
-  # next to the executable and points LD_LIBRARY_PATH at lib/.
-  local mpv_bin=""
-  if command -v mpv >/dev/null 2>&1; then
-    mpv_bin="$(command -v mpv)"
-  fi
-  if [[ -n "$mpv_bin" && -x "$mpv_bin" ]]; then
-    mkdir -p "$BUNDLE/bin"
-    cp -L "$mpv_bin" "$BUNDLE/bin/mpv"
-    chmod +x "$BUNDLE/bin/mpv"
-    echo "Bundled mpv executable from $mpv_bin"
-  else
-    echo "warning: no mpv executable found; desktop playback will need mpv on the host" >&2
-  fi
-
   # Walk the shared-library graph from libmpv, the app binary and the plugin
   # libraries already in the bundle. Only *direct* NEEDED entries are followed:
   # `ldd` prints the whole transitive closure, including libraries used by
@@ -183,9 +166,6 @@ bundle_runtime_libraries() {
   fi
   if [[ -f "$BUNDLE/mawjac" ]]; then
     queue+=("$BUNDLE/mawjac")
-  fi
-  if [[ -f "$BUNDLE/bin/mpv" ]]; then
-    queue+=("$BUNDLE/bin/mpv")
   fi
   local bundled
   for bundled in "$libdir"/*.so*; do
@@ -296,7 +276,7 @@ Installed-Size: $(du -sk "$deb_root/opt" | cut -f1)
 Maintainer: mmbesar <mbesar@proton.me>
 Homepage: https://github.com/mmbesar/Mawjac
 Depends: libgtk-3-0t64 | libgtk-3-0, libmpv2 | libmpv1, libstdc++6, libblkid1, liblzma5
-Recommends: fonts-noto-core
+Recommends: fonts-noto-core, mpv
 Description: Bidirectional IPTV client for Android and Linux
  Mawjac plays M3U playlists with an XMLTV guide, a 12-hour timeline and
  first-class Arabic/English bidirectional text. It supports Catppuccin,
@@ -329,6 +309,7 @@ URL:            https://github.com/mmbesar/Mawjac
 BuildArch:      $RPM_ARCH
 Requires:       gtk3
 Requires:       mpv-libs
+Recommends:     mpv
 
 %description
 Mawjac plays M3U playlists with an XMLTV guide, a 12-hour timeline and

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'app.dart';
 import 'data/app_state.dart';
+import 'data/mpv_runtime.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,7 @@ Future<void> main() async {
   }
 
   final state = await AppState.create();
+  MpvRuntime.useCustomPath(state.settings.mpvPath);
   runApp(
     ChangeNotifierProvider<AppState>.value(
       value: state,

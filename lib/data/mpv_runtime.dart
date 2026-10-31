@@ -50,10 +50,20 @@ class MpvRuntime {
   MpvRuntime._();
 
   static Future<MpvCapabilities?>? _probe;
+  static String _customPath = '';
 
   /// Probes once per run; later calls reuse the answer.
   static Future<MpvCapabilities?> capabilities() {
     return _probe ??= _probeUncached();
+  }
+
+  /// Sets the path the user chose in settings and probes again.
+  static void useCustomPath(String path) {
+    final trimmed = path.trim();
+    if (trimmed != _customPath) {
+      _customPath = trimmed;
+      _probe = null;
+    }
   }
 
   /// Forgets the cached answer, e.g. after the user installs mpv.
@@ -111,6 +121,7 @@ class MpvRuntime {
   static Future<MpvCapabilities?> _probeUncached() async {
     final override = Platform.environment['MAWJAC_MPV'];
     final candidates = <(String, bool)>[
+      if (_customPath.isNotEmpty) (_customPath, false),
       if (override != null && override.isNotEmpty) (override, false),
       ?(() {
         final bundled = _bundledMpv();
