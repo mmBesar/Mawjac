@@ -13,6 +13,7 @@ import '../player_page.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/channel_row.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/programme_poster.dart';
 import '../widgets/programme_sheet.dart';
 import 'channel_guide_page.dart';
 
@@ -219,12 +220,22 @@ class _HitTile extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: <Widget>[
-                ChannelLogo(
-                  channel: hit.channel,
-                  allowInsecure: allowInsecure,
-                  size: 44,
-                  radius: 12,
-                ),
+                if (programme.iconUrl != null &&
+                    programme.iconUrl!.trim().isNotEmpty)
+                  ProgrammePoster(
+                    programme: programme,
+                    allowInsecure: allowInsecure,
+                    width: 128,
+                    height: 72,
+                    radius: 12,
+                  )
+                else
+                  ChannelLogo(
+                    channel: hit.channel,
+                    allowInsecure: allowInsecure,
+                    size: 56,
+                    radius: 14,
+                  ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -238,6 +249,15 @@ class _HitTile extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      if (programme.subTitle != null)
+                        BidiText(
+                          programme.subTitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.subtext1,
+                          ),
+                        ),
                       const SizedBox(height: 2),
                       BidiText(
                         '${hit.channel.name} · $when',

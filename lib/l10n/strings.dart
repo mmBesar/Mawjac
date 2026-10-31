@@ -459,6 +459,9 @@ class AppStrings {
   String get autoRefreshHelp => isArabic
       ? 'يحدّث القنوات والدليل في الخلفية للحفاظ عليهما محدّثين.'
       : 'Reloads the channels and guide in the background to keep them current.';
+  String get guideSpan => isArabic ? 'مدى الدليل' : 'Guide timeline length';
+  String hoursCount(int hours) =>
+      isArabic ? '$hours ساعة' : '$hours hours';
   String get playerSection => isArabic ? 'المشغّل' : 'Player';
   String get useMpvWindow =>
       isArabic ? 'مشغّل mpv في نافذة مستقلة' : 'Play in a separate mpv window';

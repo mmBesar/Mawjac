@@ -270,6 +270,7 @@ class AppSettings {
     this.startFullscreen = false,
     this.mpvPath = '',
     this.autoRefreshMinutes = 360,
+    this.guideHours = 12,
   });
 
   factory AppSettings.defaults() => const AppSettings(
@@ -307,6 +308,9 @@ class AppSettings {
   /// How often the playlist and guide reload by themselves; 0 turns it off.
   final int autoRefreshMinutes;
 
+  /// How many hours the guide timeline spans (12 to 72).
+  final int guideHours;
+
   AppSettings copyWith({
     ThemeFamily? themeFamily,
     ThemeAccent? accent,
@@ -320,6 +324,7 @@ class AppSettings {
     bool? startFullscreen,
     String? mpvPath,
     int? autoRefreshMinutes,
+    int? guideHours,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -336,6 +341,7 @@ class AppSettings {
       startFullscreen: startFullscreen ?? this.startFullscreen,
       mpvPath: mpvPath ?? this.mpvPath,
       autoRefreshMinutes: autoRefreshMinutes ?? this.autoRefreshMinutes,
+      guideHours: guideHours ?? this.guideHours,
     );
   }
 
@@ -352,6 +358,7 @@ class AppSettings {
         'startFullscreen': startFullscreen,
         'mpvPath': mpvPath,
         'autoRefreshMinutes': autoRefreshMinutes,
+        'guideHours': guideHours,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -380,6 +387,7 @@ class AppSettings {
       startFullscreen: json['startFullscreen'] as bool? ?? false,
       mpvPath: json['mpvPath'] as String? ?? '',
       autoRefreshMinutes: json['autoRefreshMinutes'] as int? ?? 360,
+      guideHours: json['guideHours'] as int? ?? 12,
     );
   }
 }

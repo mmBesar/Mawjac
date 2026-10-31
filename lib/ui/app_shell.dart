@@ -27,6 +27,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
   final ValueNotifier<int> _searchFocus = ValueNotifier<int>(0);
+  final PageController _pageController = PageController();
 
   @override
   void initState() {
@@ -42,14 +43,55 @@ class _AppShellState extends State<AppShell> {
       HardwareKeyboard.instance.removeHandler(_onKey);
     }
     _searchFocus.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
   void _goTo(int index) {
     setState(() => _index = index);
+    if (!kIsDesktop && _pageController.hasClients) {
+      unawaited(
+        _pageController.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+        ),
+      );
+    }
     if (index == 3) {
       _searchFocus.value++;
     }
+  }
+
+  /// The guide's timeline reports drags past its ends; they move the page
+  /// view, so one swipe scrolls the timeline and, at its edge, changes page.
+  void _edgeDrag(double overscroll) {
+    if (!_pageController.hasClients) {
+      return;
+    }
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    final position = _pageController.position;
+    final target = (position.pixels + (rtl ? -overscroll : overscroll))
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    _pageController.jumpTo(target);
+  }
+
+  void _edgeDragEnd() {
+    if (!_pageController.hasClients) {
+      return;
+    }
+    final page = _pageController.page;
+    if (page == null || page == page.roundToDouble()) {
+      return;
+    }
+    unawaited(
+      _pageController.animateToPage(
+        page.round(),
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      ),
+    );
   }
 
   /// Ctrl+1..5 switch tab, Ctrl+F / Ctrl+K search, Ctrl+R refresh. This is a
@@ -108,7 +150,11 @@ class _AppShellState extends State<AppShell> {
     final pages = <Widget>[
       WatchPage(onOpenSources: _openSources),
       const FavoritesPage(),
-      GuidePage(onOpenSources: _openSources),
+      GuidePage(
+        onOpenSources: _openSources,
+        onEdgeDrag: kIsDesktop ? null : _edgeDrag,
+        onEdgeDragEnd: kIsDesktop ? null : _edgeDragEnd,
+      ),
       SearchPage(focusRequests: _searchFocus),
       SettingsPage(onOpenSources: _openSources),
     ];
@@ -150,7 +196,21 @@ class _AppShellState extends State<AppShell> {
             ),
           ),
         ),
-        IndexedStack(index: _index, children: pages),
+        if (kIsDesktop)
+          IndexedStack(index: _index, children: pages)
+        else
+          PageView(
+            controller: _pageController,
+            physics: const ClampingScrollPhysics(),
+            onPageChanged: (index) {
+              if (index != _index) {
+                setState(() => _index = index);
+              }
+            },
+            children: <Widget>[
+              for (final page in pages) _KeepAlive(child: page),
+            ],
+          ),
       ],
     );
 
@@ -532,5 +592,29 @@ class _SidebarItemState extends State<_SidebarItem> {
         ),
       ),
     );
+  }
+}
+
+
+/// Keeps a page's state (scroll position, search text) while it is off screen
+/// in the page view.
+class _KeepAlive extends StatefulWidget {
+  const _KeepAlive({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAlive> createState() => _KeepAliveState();
+}
+
+class _KeepAliveState extends State<_KeepAlive>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }

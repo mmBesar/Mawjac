@@ -18,9 +18,19 @@ import 'channel_guide_page.dart';
 /// A twelve-hour timeline. The channel column stays put while the programmes
 /// scroll sideways, and both scroll up and down together.
 class GuidePage extends StatefulWidget {
-  const GuidePage({super.key, required this.onOpenSources});
+  const GuidePage({
+    super.key,
+    required this.onOpenSources,
+    this.onEdgeDrag,
+    this.onEdgeDragEnd,
+  });
 
   final VoidCallback onOpenSources;
+
+  /// Called with the distance dragged past either end of the timeline, so the
+  /// app can turn it into a page swipe. Null where pages do not swipe.
+  final ValueChanged<double>? onEdgeDrag;
+  final VoidCallback? onEdgeDragEnd;
 
   @override
   State<GuidePage> createState() => _GuidePageState();
@@ -28,12 +38,13 @@ class GuidePage extends StatefulWidget {
 
 class _GuidePageState extends State<GuidePage> {
   static const double _minZoom = 2.5;
-  static const double _maxZoom = 12;
+  static const double _maxZoom = 48;
   static const double _rowHeight = 96;
   static const double _nameBand = 22;
   static const double _channelWidth = 80;
   static const double _headerHeight = 40;
-  static const int _spanMinutes = 12 * 60;
+  int _hours = 12;
+  int get _spanMinutes => _hours * 60;
   static const double _bottomPadding = 110;
 
   final ScrollController _horizontal = ScrollController();
@@ -41,7 +52,7 @@ class _GuidePageState extends State<GuidePage> {
   final ScrollController _rightVertical = ScrollController();
 
   /// Pixels per minute of the timeline; the slider changes it.
-  double _zoom = 5;
+  double _zoom = 6.75;
   bool _syncing = false;
   bool _favoritesOnly = false;
   bool _scrolledToNow = false;
@@ -146,9 +157,11 @@ class _GuidePageState extends State<GuidePage> {
       );
     }
 
+    _hours = state.settings.guideHours;
+
     // Roll the window forward when the app has been open for most of it.
     if (state.now.isAfter(
-      _windowStart.add(const Duration(minutes: _spanMinutes - 90)),
+      _windowStart.add(Duration(minutes: _spanMinutes - 90)),
     )) {
       _windowStart = _windowStartFor(state.now);
       _scrolledToNow = false;
@@ -226,10 +239,13 @@ class _GuidePageState extends State<GuidePage> {
                       trackShape: const RoundedRectSliderTrackShape(),
                     ),
                     child: Slider(
-                      min: _minZoom,
-                      max: _maxZoom,
-                      value: _zoom,
-                      onChanged: _setZoom,
+                      value: (math.log(_zoom / _minZoom) /
+                              math.log(_maxZoom / _minZoom))
+                          .clamp(0.0, 1.0)
+                          .toDouble(),
+                      onChanged: (t) => _setZoom(
+                        _minZoom * math.pow(_maxZoom / _minZoom, t).toDouble(),
+                      ),
                     ),
                   ),
                 ),
@@ -280,7 +296,21 @@ class _GuidePageState extends State<GuidePage> {
                       ),
                     ),
                     Expanded(
-                      child: SingleChildScrollView(
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: (notification) {
+                          if (notification.depth != 0) {
+                            return false;
+                          }
+                          if (notification is OverscrollNotification &&
+                              notification.dragDetails != null) {
+                            widget.onEdgeDrag?.call(notification.overscroll);
+                          } else if (notification is ScrollEndNotification) {
+                            widget.onEdgeDragEnd?.call();
+                          }
+                          return false;
+                        },
+                        child: SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
                         controller: _horizontal,
                         scrollDirection: Axis.horizontal,
                         child: SizedBox(
@@ -334,6 +364,7 @@ class _GuidePageState extends State<GuidePage> {
                               ),
                             ],
                           ),
+                        ),
                         ),
                       ),
                     ),
@@ -455,24 +486,37 @@ class _TimeHeader extends StatelessWidget {
     final colors = context.mawjColors;
     final theme = Theme.of(context);
     final strings = context.strings;
+    // Label spacing follows the zoom: the smallest step that leaves room for
+    // a time label.
+    var step = 60;
+    for (final candidate in const <int>[5, 10, 15, 30, 60]) {
+      if (candidate * pxPerMinute >= 72) {
+        step = candidate;
+        break;
+      }
+    }
     return SizedBox(
       height: height,
       child: Stack(
         children: <Widget>[
-          for (var slot = 0; slot < spanMinutes ~/ 30; slot++)
+          for (var slot = 0; slot < spanMinutes ~/ step; slot++)
             Positioned(
-              left: slot * 30 * pxPerMinute + 8,
+              left: slot * step * pxPerMinute + 8,
               top: 0,
               bottom: 0,
               child: Center(
                 child: Text(
                   strings.formatTime(
-                    start.add(Duration(minutes: slot * 30)),
+                    start.add(Duration(minutes: slot * step)),
                     use24HourTime: use24,
                   ),
                   style: theme.textTheme.labelMedium?.copyWith(
-                    color: slot.isEven ? colors.subtext1 : colors.overlay1,
-                    fontWeight: slot.isEven ? FontWeight.w700 : FontWeight.w500,
+                    color: (slot * step) % 30 == 0
+                        ? colors.subtext1
+                        : colors.overlay1,
+                    fontWeight: (slot * step) % 30 == 0
+                        ? FontWeight.w700
+                        : FontWeight.w500,
                     fontFeatures: const <FontFeature>[
                       FontFeature.tabularFigures(),
                     ],

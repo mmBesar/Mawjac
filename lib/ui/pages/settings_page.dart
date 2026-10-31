@@ -185,6 +185,32 @@ class SettingsPage extends StatelessWidget {
                             '${strings.programmeCount(state.epg.programmeCount)}',
                       ),
                     const SizedBox(height: 6),
+                    _FieldLabel(text: strings.guideSpan),
+                    DropdownButton<int>(
+                      isExpanded: true,
+                      value: const <int>[12, 24, 48, 72]
+                              .contains(settings.guideHours)
+                          ? settings.guideHours
+                          : 12,
+                      dropdownColor: colors.surface1,
+                      items: <DropdownMenuItem<int>>[
+                        for (final hours in const <int>[12, 24, 48, 72])
+                          DropdownMenuItem<int>(
+                            value: hours,
+                            child: Text(strings.hoursCount(hours)),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          unawaited(
+                            state.updateSettings(
+                              settings.copyWith(guideHours: value),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
                     _FieldLabel(text: strings.autoRefresh),
                     DropdownButton<int>(
                       isExpanded: true,
