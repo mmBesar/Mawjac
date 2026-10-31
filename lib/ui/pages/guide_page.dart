@@ -9,6 +9,7 @@ import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../l10n/strings.dart';
 import '../player_page.dart';
+import 'channel_guide_page.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/programme_sheet.dart';
@@ -431,6 +432,8 @@ class _ChannelCell extends StatelessWidget {
     final theme = Theme.of(context);
     return InkWell(
       onTap: () => openPlayer(context, channel),
+      onLongPress: () => ChannelGuidePage.open(context, channel),
+      onSecondaryTap: () => ChannelGuidePage.open(context, channel),
       child: DecoratedBox(
         decoration: BoxDecoration(
           border: Border(

@@ -1,7 +1,12 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
-import '../core/bidi.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
+import '../core/app_info.dart';
 import '../core/theme.dart';
+import '../data/app_state.dart';
 import '../l10n/strings.dart';
 import 'pages/guide_page.dart';
 import 'pages/search_page.dart';
@@ -84,41 +89,39 @@ class _AppShellState extends State<AppShell> {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= 900) {
-          final extended = constraints.maxWidth >= 1280;
-          return Scaffold(
-            body: Row(
-              children: <Widget>[
-                NavigationRail(
-                  extended: extended,
-                  selectedIndex: _index,
-                  backgroundColor: colors.mantle,
-                  onDestinationSelected: (index) =>
-                      setState(() => _index = index),
-                  labelType: extended
-                      ? NavigationRailLabelType.none
-                      : NavigationRailLabelType.all,
-                  leading: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.asset(
-                        'assets/branding/mawjac_icon.png',
-                        width: 40,
-                        height: 40,
-                      ),
+          final compact = constraints.maxWidth < 1180;
+          return CallbackShortcuts(
+            bindings: <ShortcutActivator, VoidCallback>{
+              const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+                  () => setState(() => _index = 2),
+              const SingleActivator(LogicalKeyboardKey.digit1, control: true):
+                  () => setState(() => _index = 0),
+              const SingleActivator(LogicalKeyboardKey.digit2, control: true):
+                  () => setState(() => _index = 1),
+              const SingleActivator(LogicalKeyboardKey.digit3, control: true):
+                  () => setState(() => _index = 2),
+              const SingleActivator(LogicalKeyboardKey.digit4, control: true):
+                  () => setState(() => _index = 3),
+              const SingleActivator(LogicalKeyboardKey.keyR, control: true):
+                  () => unawaited(context.read<AppState>().refresh()),
+            },
+            child: Focus(
+              autofocus: true,
+              child: Scaffold(
+                body: Row(
+                  children: <Widget>[
+                    _Sidebar(
+                      compact: compact,
+                      labels: labels,
+                      icons: icons,
+                      selected: _index,
+                      onSelected: (index) => setState(() => _index = index),
+                      onOpenSources: _openSources,
                     ),
-                  ),
-                  destinations: <NavigationRailDestination>[
-                    for (var index = 0; index < labels.length; index++)
-                      NavigationRailDestination(
-                        icon: Icon(icons[index]),
-                        selectedIcon: Icon(icons[index], color: colors.accent),
-                        label: BidiText(labels[index]),
-                      ),
+                    Expanded(child: content),
                   ],
                 ),
-                Expanded(child: content),
-              ],
+              ),
             ),
           );
         }
@@ -260,6 +263,219 @@ class _NavItem extends StatelessWidget {
                     : const SizedBox.shrink(),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// The desktop navigation: a fixed sidebar with the wordmark, the four
+/// sections (with hover and keyboard hints), and the active source at the
+/// bottom.
+class _Sidebar extends StatelessWidget {
+  const _Sidebar({
+    required this.compact,
+    required this.labels,
+    required this.icons,
+    required this.selected,
+    required this.onSelected,
+    required this.onOpenSources,
+  });
+
+  final bool compact;
+  final List<String> labels;
+  final List<IconData> icons;
+  final int selected;
+  final ValueChanged<int> onSelected;
+  final VoidCallback onOpenSources;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.mawjColors;
+    final theme = Theme.of(context);
+    final state = context.watch<AppState>();
+    final sourceName = state.activeSource?.name ?? '';
+
+    return Container(
+      width: compact ? 76 : 244,
+      decoration: BoxDecoration(
+        color: colors.mantle,
+        border: BorderDirectional(
+          end: BorderSide(color: colors.surface0.withValues(alpha: 0.8)),
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 20, compact ? 12 : 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            mainAxisAlignment:
+                compact ? MainAxisAlignment.center : MainAxisAlignment.start,
+            children: <Widget>[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  'assets/branding/mawjac_icon.png',
+                  width: 40,
+                  height: 40,
+                ),
+              ),
+              if (!compact) ...<Widget>[
+                const SizedBox(width: 12),
+                Text(
+                  'Mawjac',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 28),
+          for (var index = 0; index < labels.length; index++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: _SidebarItem(
+                label: labels[index],
+                icon: icons[index],
+                hint: 'Ctrl+${index + 1}',
+                selected: index == selected,
+                compact: compact,
+                onTap: () => onSelected(index),
+              ),
+            ),
+          const Spacer(),
+          if (sourceName.isNotEmpty)
+            Tooltip(
+              message: sourceName,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: onOpenSources,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Row(
+                    mainAxisAlignment: compact
+                        ? MainAxisAlignment.center
+                        : MainAxisAlignment.start,
+                    children: <Widget>[
+                      Icon(Icons.dns_rounded, size: 20, color: colors.subtext0),
+                      if (!compact) ...<Widget>[
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            sourceName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colors.subtext1,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (!compact)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+              child: Text(
+                'v$kAppVersion',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colors.overlay0,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarItem extends StatefulWidget {
+  const _SidebarItem({
+    required this.label,
+    required this.icon,
+    required this.hint,
+    required this.selected,
+    required this.compact,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final String hint;
+  final bool selected;
+  final bool compact;
+  final VoidCallback onTap;
+
+  @override
+  State<_SidebarItem> createState() => _SidebarItemState();
+}
+
+class _SidebarItemState extends State<_SidebarItem> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.mawjColors;
+    final theme = Theme.of(context);
+    final selected = widget.selected;
+    final background = selected
+        ? colors.accent.withValues(alpha: 0.16)
+        : (_hover ? colors.surface0 : Colors.transparent);
+    final foreground = selected ? colors.accent : colors.subtext1;
+
+    return Tooltip(
+      message: '${widget.label}  ${widget.hint}',
+      waitDuration: const Duration(milliseconds: 500),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            height: 46,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              mainAxisAlignment: widget.compact
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
+              children: <Widget>[
+                Icon(widget.icon, size: 22, color: foreground),
+                if (!widget.compact) ...<Widget>[
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: foreground,
+                        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (_hover || selected)
+                    Text(
+                      widget.hint,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colors.overlay0,
+                      ),
+                    ),
+                ],
+              ],
+            ),
           ),
         ),
       ),

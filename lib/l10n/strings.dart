@@ -425,6 +425,55 @@ class AppStrings {
   String get previousChannel => isArabic ? 'القناة السابقة' : 'Previous channel';
   String get manageSources => isArabic ? 'إدارة المصادر' : 'Manage sources';
   String get startsSoon => isArabic ? 'يبدأ قريبًا' : 'Starts soon';
+  // Desktop player and settings.
+  String get startingPlayer =>
+      isArabic ? 'جارٍ تشغيل المشغّل' : 'Starting the player';
+  String get playingInWindow =>
+      isArabic ? 'يعمل في نافذة المشغّل' : 'Playing in the player window';
+  String get stopPlayback => isArabic ? 'إيقاف' : 'Stop';
+  String get playerClosed =>
+      isArabic ? 'أُغلقت نافذة المشغّل' : 'The player window closed';
+  String get playerFailed =>
+      isArabic ? 'توقف المشغّل بخطأ' : 'The player stopped with an error';
+  String decodingWith(String decoder) =>
+      isArabic ? 'فك الترميز: $decoder' : 'Decoding: $decoder';
+  String get softwareDecoding => isArabic ? 'برمجي' : 'software';
+  String get toggleFullscreen =>
+      isArabic ? 'ملء الشاشة' : 'Toggle fullscreen';
+  String get playerSection => isArabic ? 'المشغّل' : 'Player';
+  String get useMpvWindow =>
+      isArabic ? 'مشغّل mpv في نافذة مستقلة' : 'Play in a separate mpv window';
+  String get useMpvWindowBody => isArabic
+      ? 'أفضل أداء على لينكس: فك ترميز بالعتاد وملء شاشة حقيقي. عند الإيقاف يعمل المشغّل المدمج.'
+      : 'Best on Linux: hardware decoding and real compositor fullscreen. Off uses the built-in renderer.';
+  String get hardwareDecoding =>
+      isArabic ? 'فك الترميز بالعتاد' : 'Hardware decoding';
+  String get hwdecAutoSafe =>
+      isArabic ? 'تلقائي (آمن)' : 'Automatic (safe)';
+  String get hwdecAuto => isArabic ? 'تلقائي' : 'Automatic';
+  String get hwdecOff => isArabic ? 'برمجي فقط' : 'Software only';
+  String get hwdecAutoCopy =>
+      isArabic ? 'تلقائي (بنسخ الإطارات)' : 'Automatic (copy-back)';
+  String get videoOutput => isArabic ? 'مخرج الفيديو' : 'Video output';
+  String get videoOutputAuto => isArabic ? 'الافتراضي' : 'Default';
+  String get useMpvConfig =>
+      isArabic ? 'استخدم إعدادات mpv الخاصة بي' : 'Use my own mpv config';
+  String get useMpvConfigBody => isArabic
+      ? 'يحمّل ‎~/.config/mpv‎ بما فيها السكربتات مثل uosc.'
+      : 'Loads ~/.config/mpv, including scripts such as uosc.';
+  String get startFullscreen =>
+      isArabic ? 'ابدأ بملء الشاشة' : 'Start fullscreen';
+  String mpvFound(String version, bool bundled) => isArabic
+      ? '${bundled ? 'مضمّن' : 'من النظام'} · $version'
+      : '${bundled ? 'Bundled' : 'System'} · $version';
+  String get mpvMissing => isArabic
+      ? 'لم يوجد mpv؛ سيُستخدم المشغّل المدمج. ثبّت حزمة mpv أو عيّن MAWJAC_MPV.'
+      : 'mpv was not found, so the built-in player is used. Install mpv or set MAWJAC_MPV.';
+  String get today => isArabic ? 'اليوم' : 'Today';
+  String get tomorrow => isArabic ? 'غدًا' : 'Tomorrow';
+  String get noUpcoming =>
+      isArabic ? 'لا توجد برامج قادمة لهذه القناة' : 'No upcoming programmes for this channel';
+
   String minutesLeft(int minutes) =>
       isArabic ? 'متبقي $minutes د' : '$minutes min left';
   String startsIn(int minutes) {

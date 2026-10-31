@@ -13,19 +13,34 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../core/app_info.dart';
 import '../core/bidi.dart';
 import '../core/network_image.dart';
+import '../core/platform.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
 import '../data/models.dart';
+import '../data/mpv_runtime.dart';
 import '../l10n/strings.dart';
+import 'desktop_player_page.dart';
 import 'widgets/channel_logo.dart';
 import 'widgets/wave.dart';
 
 /// Opens the player for [channel] with a short fade.
-Future<void> openPlayer(BuildContext context, Channel channel) {
-  return Navigator.of(context).push<void>(
+///
+/// On desktop the channel plays in a separate native mpv window (when mpv is
+/// available and the setting is on) and Mawjac shows a "now playing" page;
+/// everywhere else it plays inside the app.
+Future<void> openPlayer(BuildContext context, Channel channel) async {
+  final state = context.read<AppState>();
+  final navigator = Navigator.of(context);
+  Widget page = PlayerPage(channel: channel);
+  if (kIsDesktop && state.settings.useMpvWindow) {
+    final capabilities = await MpvRuntime.capabilities();
+    if (capabilities != null) {
+      page = NowPlayingPage(channel: channel, capabilities: capabilities);
+    }
+  }
+  await navigator.push<void>(
     PageRouteBuilder<void>(
-      pageBuilder: (context, animation, secondaryAnimation) =>
-          PlayerPage(channel: channel),
+      pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return FadeTransition(
           opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
@@ -768,8 +783,8 @@ class _PlayerPageState extends State<PlayerPage> {
                   aspectRatio: 16 / 9,
                   child: _videoLayer(state, immersive: false),
                 ),
-                Expanded(child: _InfoPanel(channel: _channel)),
-                _ChannelStrip(
+                Expanded(child: PlayerInfoPanel(channel: _channel)),
+                PlayerChannelStrip(
                   channels: _zapList(state),
                   current: _channel,
                   allowInsecure:
@@ -843,6 +858,7 @@ class _PlayerPageState extends State<PlayerPage> {
                             trackColor: Colors.white24,
                             height: 30,
                             animate: true,
+                            forceAnimate: true,
                           ),
                         ),
                         if (!_hasVideo) ...<Widget>[
@@ -1160,7 +1176,7 @@ class _PlayerPageState extends State<PlayerPage> {
                           ),
                         ],
                         if (showStrip)
-                          _ChannelStrip(
+                          PlayerChannelStrip(
                             channels: _zapList(state),
                             current: _channel,
                             allowInsecure: allowInsecure,
@@ -1180,8 +1196,8 @@ class _PlayerPageState extends State<PlayerPage> {
 }
 
 /// Everything under the video in portrait: what is on and what comes next.
-class _InfoPanel extends StatelessWidget {
-  const _InfoPanel({required this.channel});
+class PlayerInfoPanel extends StatelessWidget {
+  const PlayerInfoPanel({super.key, required this.channel});
 
   final Channel channel;
 
@@ -1377,8 +1393,8 @@ class _InfoPanel extends StatelessWidget {
 }
 
 /// A row of channel logos for switching without leaving the player.
-class _ChannelStrip extends StatefulWidget {
-  const _ChannelStrip({
+class PlayerChannelStrip extends StatefulWidget {
+  const PlayerChannelStrip({
     required this.channels,
     required this.current,
     required this.allowInsecure,
@@ -1393,10 +1409,10 @@ class _ChannelStrip extends StatefulWidget {
   final bool onDark;
 
   @override
-  State<_ChannelStrip> createState() => _ChannelStripState();
+  State<PlayerChannelStrip> createState() => PlayerChannelStripState();
 }
 
-class _ChannelStripState extends State<_ChannelStrip> {
+class PlayerChannelStripState extends State<PlayerChannelStrip> {
   static const double _itemWidth = 80;
 
   late final ScrollController _scroll;

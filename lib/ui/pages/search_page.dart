@@ -9,6 +9,7 @@ import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../l10n/strings.dart';
 import '../player_page.dart';
+import 'channel_guide_page.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/channel_row.dart';
 import '../widgets/empty_state.dart';
@@ -80,6 +81,7 @@ class _SearchPageState extends State<SearchPage> {
                     allowInsecure: allowInsecure,
                     favorite: state.isFavorite(channel),
                     onTap: () => openPlayer(context, channel),
+                    onOpenGuide: () => ChannelGuidePage.open(context, channel),
                     onToggleFavorite: () =>
                         unawaited(state.toggleFavorite(channel)),
                   ),

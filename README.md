@@ -20,6 +20,19 @@ ErsatzTV's HLS master advertises a WebVTT subtitle rendition. media_kit's defaul
 ffmpeg options (`strict=experimental`) make ffmpeg read only that rendition and
 never open the video. Mawjac sets its own demuxer options without that flag.
 
+## Desktop playback
+
+On Linux, Mawjac plays each channel in its own native **mpv** window. mpv cannot
+be embedded inside another window on Wayland, and its render API can freeze on
+some Mesa setups, so a separate window gives GPU decoding, real compositor
+fullscreen and mpv's own on-screen controls. Mawjac stays open as a remote:
+now/next, channel switching, favorites.
+
+Settings lists the hardware decoders your mpv reports (VA-API, NVDEC, Vulkan…),
+with a software fallback. The AppImage ships its own mpv; with a DEB/RPM or a
+source build mpv is taken from `PATH`, or from `MAWJAC_MPV=/path/to/mpv`. If no
+mpv is found, the built-in renderer is used.
+
 ## Build
 
 See [docs/BUILDING.md](docs/BUILDING.md) and [docs/SOURCES.md](docs/SOURCES.md).

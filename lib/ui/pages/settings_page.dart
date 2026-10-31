@@ -6,9 +6,11 @@ import 'package:provider/provider.dart';
 import '../../core/app_info.dart';
 import '../../core/bidi.dart';
 import '../../core/catppuccin.dart';
+import '../../core/platform.dart';
 import '../../core/theme.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
+import '../../data/mpv_runtime.dart';
 import '../../l10n/strings.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -152,6 +154,7 @@ class SettingsPage extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (kIsDesktop) const _PlayerSettings(),
                 _Section(
                   title: strings.dataAndGuide,
                   children: <Widget>[
@@ -539,6 +542,176 @@ class _InfoRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+/// Desktop player options: engine, hardware decoding and video output, with
+/// the hardware decoders offered taken from what the installed mpv reports.
+class _PlayerSettings extends StatelessWidget {
+  const _PlayerSettings();
+
+  static String _hwdecLabel(AppStrings strings, String value) {
+    return switch (value) {
+      'auto-safe' => strings.hwdecAutoSafe,
+      'auto' => strings.hwdecAuto,
+      'auto-copy-safe' || 'auto-copy' => strings.hwdecAutoCopy,
+      'no' => strings.hwdecOff,
+      _ => value,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final strings = context.strings;
+    final colors = context.mawjColors;
+    final theme = Theme.of(context);
+    final settings = state.settings;
+
+    return _Section(
+      title: strings.playerSection,
+      children: <Widget>[
+        FutureBuilder<MpvCapabilities?>(
+          future: MpvRuntime.capabilities(),
+          builder: (context, snapshot) {
+            final capabilities = snapshot.data;
+            final loading = snapshot.connectionState != ConnectionState.done;
+            final hwdecs = <String>[
+              'auto-safe',
+              'auto',
+              if (capabilities == null ||
+                  capabilities.hwdecs.contains('auto-copy-safe'))
+                'auto-copy-safe',
+              'no',
+              ...?capabilities?.specificHwdecs,
+            ];
+            final hwdec =
+                hwdecs.contains(settings.hwdec) ? settings.hwdec : 'auto-safe';
+            const outputs = <String>[
+              'auto',
+              'gpu-next',
+              'gpu',
+              'dmabuf-wayland',
+            ];
+            final output = outputs.contains(settings.videoOutput)
+                ? settings.videoOutput
+                : 'auto';
+            final enabled = capabilities != null;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _InfoRow(
+                  icon: Icons.smart_display_rounded,
+                  label: 'mpv',
+                  value: loading
+                      ? '…'
+                      : capabilities == null
+                          ? strings.mpvMissing
+                          : strings.mpvFound(
+                              capabilities.version,
+                              capabilities.bundled,
+                            ),
+                ),
+                SwitchListTile(
+                  value: enabled && settings.useMpvWindow,
+                  onChanged: enabled
+                      ? (value) => unawaited(
+                            state.updateSettings(
+                              settings.copyWith(useMpvWindow: value),
+                            ),
+                          )
+                      : null,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(strings.useMpvWindow),
+                  subtitle: Text(
+                    strings.useMpvWindowBody,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colors.subtext0,
+                    ),
+                  ),
+                ),
+                if (enabled && settings.useMpvWindow) ...<Widget>[
+                  const SizedBox(height: 8),
+                  _FieldLabel(text: strings.hardwareDecoding),
+                  DropdownButton<String>(
+                    isExpanded: true,
+                    value: hwdec,
+                    dropdownColor: colors.surface1,
+                    items: <DropdownMenuItem<String>>[
+                      for (final value in hwdecs)
+                        DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(_hwdecLabel(strings, value)),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        unawaited(
+                          state.updateSettings(settings.copyWith(hwdec: value)),
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _FieldLabel(text: strings.videoOutput),
+                  DropdownButton<String>(
+                    isExpanded: true,
+                    value: output,
+                    dropdownColor: colors.surface1,
+                    items: <DropdownMenuItem<String>>[
+                      for (final value in outputs)
+                        DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(
+                            value == 'auto' ? strings.videoOutputAuto : value,
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        unawaited(
+                          state.updateSettings(
+                            settings.copyWith(videoOutput: value),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  SwitchListTile(
+                    value: settings.startFullscreen,
+                    onChanged: (value) => unawaited(
+                      state.updateSettings(
+                        settings.copyWith(startFullscreen: value),
+                      ),
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(strings.startFullscreen),
+                  ),
+                  SwitchListTile(
+                    value: settings.useMpvConfig,
+                    onChanged: (value) => unawaited(
+                      state.updateSettings(
+                        settings.copyWith(useMpvConfig: value),
+                      ),
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(strings.useMpvConfig),
+                    subtitle: Text(
+                      strings.useMpvConfigBody,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.subtext0,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }

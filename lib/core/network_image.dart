@@ -8,7 +8,7 @@ import 'package:flutter/painting.dart';
 import 'package:path_provider/path_provider.dart';
 
 const String kMawjUserAgent =
-    'Mawjac/0.1.0 (+https://github.com/mmbesar/Mawjac)';
+    'Mawjac/0.2.0 (+https://github.com/mmbesar/Mawjac)';
 
 /// Every poster and logo owns a socket while it downloads. A guide built from
 /// a full XMLTV file can ask for thousands of images at once, and that burst
@@ -44,7 +44,26 @@ class _FetchLimiter {
   }
 }
 
-final _FetchLimiter _imageFetches = _FetchLimiter(6);
+final _FetchLimiter _imageFetches = _FetchLimiter(16);
+
+/// One client per trust setting, kept alive. Opening a client per image meant
+/// a new TCP connection and TLS handshake for every logo; a playlist of a few
+/// hundred channels on a self-hosted server spent most of its time there.
+final Map<bool, HttpClient> _clients = <bool, HttpClient>{};
+
+HttpClient _sharedClient(bool allowInsecure) {
+  return _clients.putIfAbsent(allowInsecure, () {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 12)
+      ..idleTimeout = const Duration(seconds: 30)
+      ..maxConnectionsPerHost = 12
+      ..userAgent = kMawjUserAgent;
+    if (allowInsecure) {
+      client.badCertificateCallback = (_, _, _) => true;
+    }
+    return client;
+  });
+}
 
 /// An [ImageProvider] for channel logos that understands Mawjac's per-source
 /// "allow self-signed certificates" setting. Plain [NetworkImage] uses the
@@ -109,12 +128,7 @@ class MawjNetworkImage extends ImageProvider<MawjNetworkImage> {
         if (attempt > 0) {
           await Future<void>.delayed(const Duration(milliseconds: 400));
         }
-        final client = HttpClient()
-          ..connectionTimeout = const Duration(seconds: 12)
-          ..userAgent = kMawjUserAgent;
-        if (key.allowInsecure) {
-          client.badCertificateCallback = (_, _, _) => true;
-        }
+        final client = _sharedClient(key.allowInsecure);
 
         try {
           final request = await client
@@ -151,8 +165,6 @@ class MawjNetworkImage extends ImageProvider<MawjNetworkImage> {
           lastError = error;
         } on TimeoutException catch (error) {
           lastError = error;
-        } finally {
-          client.close(force: true);
         }
       }
       if (lastError != null) {

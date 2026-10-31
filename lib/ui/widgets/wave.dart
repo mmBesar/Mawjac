@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../core/platform.dart';
+
 /// Mawjac's signature element. A programme's progress is drawn as a wave: the
 /// part already aired is a bright, thicker line that ends in a dot, and the
 /// part still to come is a faint line along the same curve.
@@ -16,6 +18,7 @@ class WaveProgress extends StatefulWidget {
     required this.trackColor,
     this.height = 16,
     this.animate = false,
+    this.forceAnimate = false,
   });
 
   /// 0 to 1: how much of the programme has aired.
@@ -24,6 +27,11 @@ class WaveProgress extends StatefulWidget {
   final Color trackColor;
   final double height;
   final bool animate;
+
+  /// Desktop draws waves still unless this is set: a wave that moves all the
+  /// time keeps the GPU busy while the window sits idle. Short-lived loading
+  /// indicators set it.
+  final bool forceAnimate;
 
   @override
   State<WaveProgress> createState() => _WaveProgressState();
@@ -46,8 +54,9 @@ class _WaveProgressState extends State<WaveProgress>
   }
 
   void _syncController() {
-    final shouldAnimate =
-        widget.animate && !MediaQuery.disableAnimationsOf(context);
+    final shouldAnimate = widget.animate &&
+        (!kIsDesktop || widget.forceAnimate) &&
+        !MediaQuery.disableAnimationsOf(context);
     if (shouldAnimate && _controller == null) {
       _controller = AnimationController(
         vsync: this,

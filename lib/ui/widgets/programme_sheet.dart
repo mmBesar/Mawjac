@@ -54,19 +54,25 @@ class _ProgrammeSheet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
+          if (programme.iconUrl != null) ...<Widget>[
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                return ProgrammePoster(
+                  programme: programme,
+                  allowInsecure: allowInsecure,
+                  width: width,
+                  height: (width * 9 / 16).clamp(120.0, 260.0).toDouble(),
+                  radius: 18,
+                  fit: BoxFit.contain,
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              if (programme.iconUrl != null) ...<Widget>[
-                ProgrammePoster(
-                  programme: programme,
-                  allowInsecure: allowInsecure,
-                  width: 84,
-                  height: 118,
-                  radius: 14,
-                ),
-                const SizedBox(width: 16),
-              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

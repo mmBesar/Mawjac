@@ -9,6 +9,9 @@ import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../l10n/strings.dart';
 import '../player_page.dart';
+import '../../core/platform.dart';
+import '../widgets/channel_tile.dart';
+import 'channel_guide_page.dart';
 import '../widgets/channel_art.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/channel_row.dart';
@@ -185,6 +188,35 @@ class _WatchPageState extends State<WatchPage> {
                     body: strings.noFavoritesBody,
                   ),
                 )
+              else if (wide && kIsDesktop)
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(sidePadding, 4, sidePadding, 32),
+                  sliver: SliverGrid.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 320,
+                      mainAxisExtent: kChannelTileHeight,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 16,
+                    ),
+                    itemCount: channels.length,
+                    itemBuilder: (context, index) {
+                      final channel = channels[index];
+                      return ChannelTile(
+                        channel: channel,
+                        programme: state.epg.nowFor(channel, state.now),
+                        now: state.now,
+                        allowInsecure: allowInsecure,
+                        favorite: state.isFavorite(channel),
+                        onPlay: () => openPlayer(context, channel),
+                        onOpenGuide: () =>
+                            ChannelGuidePage.open(context, channel),
+                        onToggleFavorite: () =>
+                            unawaited(state.toggleFavorite(channel)),
+                      );
+                    },
+                  ),
+                )
               else if (wide)
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(sidePadding, 4, sidePadding, 120),
@@ -241,6 +273,7 @@ class _WatchPageState extends State<WatchPage> {
       allowInsecure: allowInsecure,
       favorite: state.isFavorite(channel),
       onTap: () => openPlayer(context, channel),
+      onOpenGuide: () => ChannelGuidePage.open(context, channel),
       onToggleFavorite: () => unawaited(state.toggleFavorite(channel)),
     );
   }

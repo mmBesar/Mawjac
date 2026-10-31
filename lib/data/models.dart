@@ -263,6 +263,11 @@ class AppSettings {
     required this.language,
     required this.use24HourTime,
     this.activeSourceId,
+    this.useMpvWindow = true,
+    this.hwdec = 'auto-safe',
+    this.videoOutput = 'auto',
+    this.useMpvConfig = false,
+    this.startFullscreen = false,
   });
 
   factory AppSettings.defaults() => const AppSettings(
@@ -278,12 +283,33 @@ class AppSettings {
   final bool use24HourTime;
   final String? activeSourceId;
 
+  /// Desktop only: play in a separate native mpv window (true) or inside
+  /// the app with the built-in renderer (false).
+  final bool useMpvWindow;
+
+  /// mpv `--hwdec` value, picked from what the system reports.
+  final String hwdec;
+
+  /// mpv `--vo` value, or `auto` to leave mpv's default.
+  final String videoOutput;
+
+  /// Load the user's own `~/.config/mpv` configuration and scripts.
+  final bool useMpvConfig;
+
+  /// Open the mpv window fullscreen.
+  final bool startFullscreen;
+
   AppSettings copyWith({
     ThemeFamily? themeFamily,
     ThemeAccent? accent,
     AppLanguage? language,
     bool? use24HourTime,
     Object? activeSourceId = _unset,
+    bool? useMpvWindow,
+    String? hwdec,
+    String? videoOutput,
+    bool? useMpvConfig,
+    bool? startFullscreen,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -293,6 +319,11 @@ class AppSettings {
       activeSourceId: identical(activeSourceId, _unset)
           ? this.activeSourceId
           : activeSourceId as String?,
+      useMpvWindow: useMpvWindow ?? this.useMpvWindow,
+      hwdec: hwdec ?? this.hwdec,
+      videoOutput: videoOutput ?? this.videoOutput,
+      useMpvConfig: useMpvConfig ?? this.useMpvConfig,
+      startFullscreen: startFullscreen ?? this.startFullscreen,
     );
   }
 
@@ -302,6 +333,11 @@ class AppSettings {
         'language': language.name,
         'use24HourTime': use24HourTime,
         'activeSourceId': activeSourceId,
+        'useMpvWindow': useMpvWindow,
+        'hwdec': hwdec,
+        'videoOutput': videoOutput,
+        'useMpvConfig': useMpvConfig,
+        'startFullscreen': startFullscreen,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -323,6 +359,11 @@ class AppSettings {
       ),
       use24HourTime: json['use24HourTime'] as bool? ?? false,
       activeSourceId: json['activeSourceId'] as String?,
+      useMpvWindow: json['useMpvWindow'] as bool? ?? true,
+      hwdec: json['hwdec'] as String? ?? 'auto-safe',
+      videoOutput: json['videoOutput'] as String? ?? 'auto',
+      useMpvConfig: json['useMpvConfig'] as bool? ?? false,
+      startFullscreen: json['startFullscreen'] as bool? ?? false,
     );
   }
 }

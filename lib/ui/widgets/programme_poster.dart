@@ -11,9 +11,10 @@ class ProgrammePoster extends StatelessWidget {
     super.key,
     required this.programme,
     required this.allowInsecure,
-    this.width = 48,
-    this.height = 64,
-    this.radius = 8,
+    this.width = 160,
+    this.height = 90,
+    this.radius = 12,
+    this.fit = BoxFit.cover,
   });
 
   final Programme programme;
@@ -21,6 +22,7 @@ class ProgrammePoster extends StatelessWidget {
   final double width;
   final double height;
   final double radius;
+  final BoxFit fit;
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +45,9 @@ class ProgrammePoster extends StatelessWidget {
       child: SizedBox(
         width: width,
         height: height,
-        child: url == null || url.trim().isEmpty
+        child: ColoredBox(
+          color: colors.surface1,
+          child: url == null || url.trim().isEmpty
             ? fallback
             : Image(
                 image: ResizeImage(
@@ -57,10 +61,11 @@ class ProgrammePoster extends StatelessWidget {
                 ),
                 width: width,
                 height: height,
-                fit: BoxFit.cover,
+                fit: fit,
                 gaplessPlayback: true,
                 errorBuilder: (context, error, stackTrace) => fallback,
               ),
+        ),
       ),
     );
   }

@@ -22,6 +22,7 @@ class ChannelRow extends StatelessWidget {
     required this.favorite,
     required this.onTap,
     required this.onToggleFavorite,
+    this.onOpenGuide,
   });
 
   final Channel channel;
@@ -29,8 +30,13 @@ class ChannelRow extends StatelessWidget {
   final DateTime now;
   final bool allowInsecure;
   final bool favorite;
+  /// Plays the channel (the logo).
   final VoidCallback onTap;
   final VoidCallback onToggleFavorite;
+
+  /// Opens the channel's own guide (the name and programme). When null the
+  /// whole row plays.
+  final VoidCallback? onOpenGuide;
 
   @override
   Widget build(BuildContext context) {
@@ -45,21 +51,58 @@ class ChannelRow extends StatelessWidget {
         color: colors.surface0.withValues(alpha: 0.62),
         borderRadius: BorderRadius.circular(22),
         clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 4, 10),
+        child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 4, 0),
             child: Row(
               children: <Widget>[
-                ChannelLogo(
-                  channel: channel,
-                  allowInsecure: allowInsecure,
-                  size: 60,
-                  radius: 16,
+                Tooltip(
+                  message: strings.watchChannel,
+                  child: InkWell(
+                    onTap: onTap,
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 12, 10),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: <Widget>[
+                          ChannelLogo(
+                            channel: channel,
+                            allowInsecure: allowInsecure,
+                            size: 60,
+                            radius: 16,
+                          ),
+                          PositionedDirectional(
+                            end: -4,
+                            bottom: -4,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: colors.accent,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: colors.surface0,
+                                  width: 2,
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(3),
+                                child: Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 14,
+                                  color: theme.colorScheme.onPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 14),
                 Expanded(
-                  child: Column(
+                  child: InkWell(
+                    onTap: onOpenGuide ?? onTap,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -116,6 +159,8 @@ class ChannelRow extends StatelessWidget {
                         ),
                     ],
                   ),
+                    ),
+                  ),
                 ),
                 IconButton(
                   tooltip: favorite
@@ -130,7 +175,6 @@ class ChannelRow extends StatelessWidget {
               ],
             ),
           ),
-        ),
       ),
     );
   }
