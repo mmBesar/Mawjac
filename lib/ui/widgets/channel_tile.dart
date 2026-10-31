@@ -10,7 +10,7 @@ import 'programme_poster.dart';
 import 'wave.dart';
 
 /// Fixed height of [ChannelTile]; grids use it as their main-axis extent.
-const double kChannelTileHeight = 268;
+const double kChannelTileHeight = 332;
 
 /// A desktop channel card: a wide thumbnail (the programme's artwork, or the
 /// channel's colours and logo), then name, what is on and how far in it is.
@@ -26,10 +26,12 @@ class ChannelTile extends StatefulWidget {
     required this.onPlay,
     required this.onOpenGuide,
     required this.onToggleFavorite,
+    this.next,
   });
 
   final Channel channel;
   final Programme? programme;
+  final Programme? next;
   final DateTime now;
   final bool allowInsecure;
   final bool favorite;
@@ -206,6 +208,15 @@ class _ChannelTileState extends State<ChannelTile> {
                         color: colors.subtext1,
                       ),
                     ),
+                    if (programme?.subTitle != null)
+                      BidiText(
+                        programme!.subTitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.subtext0,
+                        ),
+                      ),
                     const SizedBox(height: 4),
                     SizedBox(
                       height: 14,
@@ -218,6 +229,19 @@ class _ChannelTileState extends State<ChannelTile> {
                               height: 14,
                             ),
                     ),
+                    if (widget.next != null) ...<Widget>[
+                      const SizedBox(height: 4),
+                      BidiText(
+                        widget.next!.subTitle == null
+                            ? '${strings.next} · ${widget.next!.title}'
+                            : '${strings.next} · ${widget.next!.title} — ${widget.next!.subTitle}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.overlay1,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

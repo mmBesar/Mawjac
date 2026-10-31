@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -18,7 +19,10 @@ import 'channel_guide_page.dart';
 /// Finds channels by name, number or group, and programmes by title,
 /// sub-title or category.
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({super.key, this.focusRequests});
+
+  /// Each change moves keyboard focus into the search box.
+  final ValueListenable<int>? focusRequests;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -26,10 +30,27 @@ class SearchPage extends StatefulWidget {
 
 class _SearchPageState extends State<SearchPage> {
   final TextEditingController _controller = TextEditingController();
+  final FocusNode _focus = FocusNode();
   String _query = '';
 
   @override
+  void initState() {
+    super.initState();
+    widget.focusRequests?.addListener(_focusRequested);
+  }
+
+  void _focusRequested() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _focus.requestFocus();
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    widget.focusRequests?.removeListener(_focusRequested);
+    _focus.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -77,6 +98,7 @@ class _SearchPageState extends State<SearchPage> {
                   child: ChannelRow(
                     channel: channel,
                     programme: state.epg.nowFor(channel, state.now),
+                    next: state.epg.nextFor(channel, state.now),
                     now: state.now,
                     allowInsecure: allowInsecure,
                     favorite: state.isFavorite(channel),
@@ -110,6 +132,7 @@ class _SearchPageState extends State<SearchPage> {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
             child: TextField(
               controller: _controller,
+              focusNode: _focus,
               onChanged: (value) => setState(() => _query = value),
               textInputAction: TextInputAction.search,
               autocorrect: false,

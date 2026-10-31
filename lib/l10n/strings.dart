@@ -440,6 +440,25 @@ class AppStrings {
   String get softwareDecoding => isArabic ? 'برمجي' : 'software';
   String get toggleFullscreen =>
       isArabic ? 'ملء الشاشة' : 'Toggle fullscreen';
+  String get switchSource => isArabic ? 'تبديل المصدر' : 'Switch source';
+  String get recentlyWatched =>
+      isArabic ? 'شوهدت مؤخرًا' : 'Recently watched';
+  String get autoRefresh =>
+      isArabic ? 'التحديث التلقائي' : 'Refresh automatically';
+  String get autoRefreshOff => isArabic ? 'متوقف' : 'Off';
+  String autoRefreshEvery(int minutes) {
+    if (minutes < 60) {
+      return isArabic ? 'كل $minutes دقيقة' : 'Every $minutes minutes';
+    }
+    final hours = minutes ~/ 60;
+    if (hours == 1) {
+      return isArabic ? 'كل ساعة' : 'Every hour';
+    }
+    return isArabic ? 'كل $hours ساعات' : 'Every $hours hours';
+  }
+  String get autoRefreshHelp => isArabic
+      ? 'يحدّث القنوات والدليل في الخلفية للحفاظ عليهما محدّثين.'
+      : 'Reloads the channels and guide in the background to keep them current.';
   String get playerSection => isArabic ? 'المشغّل' : 'Player';
   String get useMpvWindow =>
       isArabic ? 'مشغّل mpv في نافذة مستقلة' : 'Play in a separate mpv window';

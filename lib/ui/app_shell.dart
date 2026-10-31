@@ -5,14 +5,17 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_info.dart';
+import '../core/platform.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
 import '../l10n/strings.dart';
+import 'pages/favorites_page.dart';
 import 'pages/guide_page.dart';
 import 'pages/search_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/sources_page.dart';
 import 'pages/watch_page.dart';
+import 'widgets/source_switcher.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -23,6 +26,68 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
+  final ValueNotifier<int> _searchFocus = ValueNotifier<int>(0);
+
+  @override
+  void initState() {
+    super.initState();
+    if (kIsDesktop) {
+      HardwareKeyboard.instance.addHandler(_onKey);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (kIsDesktop) {
+      HardwareKeyboard.instance.removeHandler(_onKey);
+    }
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  void _goTo(int index) {
+    setState(() => _index = index);
+    if (index == 3) {
+      _searchFocus.value++;
+    }
+  }
+
+  /// Ctrl+1..5 switch tab, Ctrl+F / Ctrl+K search, Ctrl+R refresh. This is a
+  /// global handler so it works wherever keyboard focus happens to be, and
+  /// stays quiet while another page (the player, a sheet) is on top.
+  bool _onKey(KeyEvent event) {
+    if (event is! KeyDownEvent || !mounted) {
+      return false;
+    }
+    if (!HardwareKeyboard.instance.isControlPressed) {
+      return false;
+    }
+    if (ModalRoute.of(context)?.isCurrent != true) {
+      return false;
+    }
+    final key = event.logicalKey;
+    final tabs = <LogicalKeyboardKey>[
+      LogicalKeyboardKey.digit1,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit5,
+    ];
+    final tab = tabs.indexOf(key);
+    if (tab >= 0) {
+      _goTo(tab);
+      return true;
+    }
+    if (key == LogicalKeyboardKey.keyF || key == LogicalKeyboardKey.keyK) {
+      _goTo(3);
+      return true;
+    }
+    if (key == LogicalKeyboardKey.keyR) {
+      unawaited(context.read<AppState>().refresh());
+      return true;
+    }
+    return false;
+  }
 
   void _openSources() {
     Navigator.of(context).push(
@@ -42,18 +107,21 @@ class _AppShellState extends State<AppShell> {
 
     final pages = <Widget>[
       WatchPage(onOpenSources: _openSources),
+      const FavoritesPage(),
       GuidePage(onOpenSources: _openSources),
-      const SearchPage(),
+      SearchPage(focusRequests: _searchFocus),
       SettingsPage(onOpenSources: _openSources),
     ];
     final labels = <String>[
       strings.watch,
+      strings.favorites,
       strings.guide,
       strings.search,
       strings.settings,
     ];
     const icons = <IconData>[
       Icons.live_tv_rounded,
+      Icons.star_rounded,
       Icons.calendar_month_rounded,
       Icons.search_rounded,
       Icons.tune_rounded,
@@ -90,38 +158,19 @@ class _AppShellState extends State<AppShell> {
       builder: (context, constraints) {
         if (constraints.maxWidth >= 900) {
           final compact = constraints.maxWidth < 1180;
-          return CallbackShortcuts(
-            bindings: <ShortcutActivator, VoidCallback>{
-              const SingleActivator(LogicalKeyboardKey.keyF, control: true):
-                  () => setState(() => _index = 2),
-              const SingleActivator(LogicalKeyboardKey.digit1, control: true):
-                  () => setState(() => _index = 0),
-              const SingleActivator(LogicalKeyboardKey.digit2, control: true):
-                  () => setState(() => _index = 1),
-              const SingleActivator(LogicalKeyboardKey.digit3, control: true):
-                  () => setState(() => _index = 2),
-              const SingleActivator(LogicalKeyboardKey.digit4, control: true):
-                  () => setState(() => _index = 3),
-              const SingleActivator(LogicalKeyboardKey.keyR, control: true):
-                  () => unawaited(context.read<AppState>().refresh()),
-            },
-            child: Focus(
-              autofocus: true,
-              child: Scaffold(
-                body: Row(
-                  children: <Widget>[
-                    _Sidebar(
-                      compact: compact,
-                      labels: labels,
-                      icons: icons,
-                      selected: _index,
-                      onSelected: (index) => setState(() => _index = index),
-                      onOpenSources: _openSources,
-                    ),
-                    Expanded(child: content),
-                  ],
+          return Scaffold(
+            body: Row(
+              children: <Widget>[
+                _Sidebar(
+                  compact: compact,
+                  labels: labels,
+                  icons: icons,
+                  selected: _index,
+                  onSelected: _goTo,
+                  onOpenSources: _openSources,
                 ),
-              ),
+                Expanded(child: content),
+              ],
             ),
           );
         }
@@ -139,7 +188,7 @@ class _AppShellState extends State<AppShell> {
                     labels: labels,
                     icons: icons,
                     selected: _index,
-                    onSelected: (index) => setState(() => _index = index),
+                    onSelected: _goTo,
                   ),
                 ),
               ),
@@ -353,7 +402,10 @@ class _Sidebar extends StatelessWidget {
               message: sourceName,
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onTap: onOpenSources,
+                onTap: () => showSourceSwitcher(
+                  context,
+                  onManage: onOpenSources,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(10),
                   child: Row(

@@ -269,6 +269,7 @@ class AppSettings {
     this.useMpvConfig = false,
     this.startFullscreen = false,
     this.mpvPath = '',
+    this.autoRefreshMinutes = 360,
   });
 
   factory AppSettings.defaults() => const AppSettings(
@@ -303,6 +304,9 @@ class AppSettings {
   /// Optional path to the mpv executable; empty means look in PATH.
   final String mpvPath;
 
+  /// How often the playlist and guide reload by themselves; 0 turns it off.
+  final int autoRefreshMinutes;
+
   AppSettings copyWith({
     ThemeFamily? themeFamily,
     ThemeAccent? accent,
@@ -315,6 +319,7 @@ class AppSettings {
     bool? useMpvConfig,
     bool? startFullscreen,
     String? mpvPath,
+    int? autoRefreshMinutes,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -330,6 +335,7 @@ class AppSettings {
       useMpvConfig: useMpvConfig ?? this.useMpvConfig,
       startFullscreen: startFullscreen ?? this.startFullscreen,
       mpvPath: mpvPath ?? this.mpvPath,
+      autoRefreshMinutes: autoRefreshMinutes ?? this.autoRefreshMinutes,
     );
   }
 
@@ -345,6 +351,7 @@ class AppSettings {
         'useMpvConfig': useMpvConfig,
         'startFullscreen': startFullscreen,
         'mpvPath': mpvPath,
+        'autoRefreshMinutes': autoRefreshMinutes,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -372,6 +379,7 @@ class AppSettings {
       useMpvConfig: json['useMpvConfig'] as bool? ?? false,
       startFullscreen: json['startFullscreen'] as bool? ?? false,
       mpvPath: json['mpvPath'] as String? ?? '',
+      autoRefreshMinutes: json['autoRefreshMinutes'] as int? ?? 360,
     );
   }
 }

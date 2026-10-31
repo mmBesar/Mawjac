@@ -107,16 +107,96 @@ class MpvRuntime {
     return null;
   }
 
+  /// The environment for a child mpv. Inside an AppImage (or appimage-run on
+  /// NixOS) variables such as LD_LIBRARY_PATH point at the app's own bundled
+  /// libraries; a system mpv that inherits them loads the wrong libmpv/ffmpeg
+  /// and dies. Entries that point into the app's mount are removed.
   static Map<String, String> _environmentFor(String path) {
-    final env = <String, String>{};
-    final lib = _bundleLibDir();
-    if (lib != null && path.startsWith(File(Platform.resolvedExecutable).parent.path)) {
-      final existing = Platform.environment['LD_LIBRARY_PATH'];
-      env['LD_LIBRARY_PATH'] =
-          existing == null || existing.isEmpty ? lib : '$lib:$existing';
+    final env = Map<String, String>.from(Platform.environment);
+    final appDir = (() {
+      try {
+        return File(Platform.resolvedExecutable).parent.path;
+      } catch (_) {
+        return '';
+      }
+    })();
+    final appImageDir = env['APPDIR'] ?? '';
+    bool ours(String value) =>
+        (appDir.isNotEmpty && value.startsWith(appDir)) ||
+        (appImageDir.isNotEmpty && value.startsWith(appImageDir)) ||
+        value.contains('/.mount_');
+
+    final bundled = path.startsWith(appDir) && appDir.isNotEmpty;
+    for (final key in env.keys.toList()) {
+      final value = env[key] ?? '';
+      if (key == 'LD_LIBRARY_PATH' || key == 'LD_PRELOAD') {
+        if (bundled) {
+          continue;
+        }
+        final kept = value.split(':').where((part) => part.isNotEmpty && !ours(part));
+        if (kept.isEmpty) {
+          env.remove(key);
+        } else {
+          env[key] = kept.join(':');
+        }
+      } else if (const <String>{
+            'GDK_PIXBUF_MODULE_FILE',
+            'GIO_EXTRA_MODULES',
+            'GSETTINGS_SCHEMA_DIR',
+            'GTK_PATH',
+            'GTK_EXE_PREFIX',
+            'GTK_DATA_PREFIX',
+            'PERL5LIB',
+            'PYTHONPATH',
+            'QT_PLUGIN_PATH',
+          }.contains(key) &&
+          ours(value)) {
+        env.remove(key);
+      }
+    }
+    if (bundled) {
+      final lib = _bundleLibDir();
+      if (lib != null) {
+        final existing = env['LD_LIBRARY_PATH'];
+        env['LD_LIBRARY_PATH'] =
+            existing == null || existing.isEmpty ? lib : '$lib:$existing';
+      }
     }
     return env;
   }
+
+  /// Where mpv usually lives when PATH is missing or trimmed, as it is under
+  /// appimage-run and some launchers.
+  static List<String> _wellKnownLocations() {
+    final home = Platform.environment['HOME'] ?? '';
+    final user = Platform.environment['USER'] ?? '';
+    return <String>[
+      '/run/current-system/sw/bin/mpv',
+      if (user.isNotEmpty) '/etc/profiles/per-user/$user/bin/mpv',
+      if (home.isNotEmpty) '$home/.nix-profile/bin/mpv',
+      if (home.isNotEmpty) '$home/.local/bin/mpv',
+      '/usr/local/bin/mpv',
+      '/usr/bin/mpv',
+      '/bin/mpv',
+      '/snap/bin/mpv',
+    ];
+  }
+
+  static String? _firstExisting(Iterable<String> paths) {
+    for (final candidate in paths) {
+      try {
+        if (File(candidate).existsSync()) {
+          return candidate;
+        }
+      } catch (_) {
+        // Unreadable location.
+      }
+    }
+    return null;
+  }
+
+  /// Why the last probe found nothing, for the settings page.
+  static String? lastProblem;
 
   static Future<MpvCapabilities?> _probeUncached() async {
     final override = Platform.environment['MAWJAC_MPV'];
@@ -131,7 +211,12 @@ class MpvRuntime {
         final system = _fromPath();
         return system == null ? null : (system, false);
       })(),
+      ?(() {
+        final known = _firstExisting(_wellKnownLocations());
+        return known == null ? null : (known, false);
+      })(),
     ];
+    lastProblem = null;
 
     for (final (path, bundled) in candidates) {
       try {
@@ -140,19 +225,23 @@ class MpvRuntime {
           path,
           const <String>['--version'],
           environment: env,
+          includeParentEnvironment: false,
         ).timeout(const Duration(seconds: 8));
         if (version.exitCode != 0) {
+          lastProblem = '$path: ${'${version.stderr}'.trim()}';
           continue;
         }
         final help = await Process.run(
           path,
           const <String>['--no-config', '--hwdec=help'],
           environment: env,
+          includeParentEnvironment: false,
         ).timeout(const Duration(seconds: 8));
         final options = await Process.run(
           path,
           const <String>['--no-config', '--list-options'],
           environment: env,
+          includeParentEnvironment: false,
         ).timeout(const Duration(seconds: 8));
         final firstLine = '${version.stdout}'.split('\n').first.trim();
         return MpvCapabilities(
@@ -163,6 +252,7 @@ class MpvRuntime {
           supportsWaylandAppId: '${options.stdout}'.contains('--wayland-app-id'),
         );
       } catch (error) {
+        lastProblem = '$path: $error';
         debugPrint('mpv probe failed for $path: $error');
       }
     }
@@ -269,6 +359,7 @@ class MpvRuntime {
       capabilities.path,
       <String>[...arguments, '--', url],
       environment: _environmentFor(capabilities.path),
+      includeParentEnvironment: false,
     );
     final session = MpvSession._(process, ipcPath, arguments);
     session._attach();

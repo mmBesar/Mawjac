@@ -108,6 +108,7 @@ class AppState extends ChangeNotifier {
     _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
       _now = DateTime.now();
       notifyListeners();
+      _maybeAutoRefresh();
     });
     notifyListeners();
 
@@ -186,6 +187,28 @@ class AppState extends ChangeNotifier {
     ];
   }
 
+  DateTime? _lastAutoRefresh;
+
+  /// Reloads the playlist and guide once the chosen interval has passed, and
+  /// never more often than every five minutes, even when loading fails.
+  void _maybeAutoRefresh() {
+    final minutes = _settings.autoRefreshMinutes;
+    if (minutes <= 0 || _loading || activeSource == null) {
+      return;
+    }
+    final last = lastLoaded;
+    if (last == null || _now.difference(last) < Duration(minutes: minutes)) {
+      return;
+    }
+    final attempt = _lastAutoRefresh;
+    if (attempt != null &&
+        _now.difference(attempt) < const Duration(minutes: 5)) {
+      return;
+    }
+    _lastAutoRefresh = _now;
+    unawaited(refresh());
+  }
+
   Future<void> toggleFavorite(Channel channel) async {
     final sourceId = channel.sourceId;
     final next = <String>[..._favorites];
@@ -258,10 +281,10 @@ class AppState extends ChangeNotifier {
     _content = null;
     _warnings = <LoadWarning>{};
     _error = null;
-    await _storage.saveSettings(_settings);
     _loadUserLists();
     _indexChannels(const <Channel>[]);
     notifyListeners();
+    unawaited(_storage.saveSettings(_settings));
     unawaited(load());
   }
 
@@ -318,9 +341,14 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> updateSettings(AppSettings settings) async {
+    // Show the change first: the UI must not wait for the disk.
     _settings = settings;
-    await _storage.saveSettings(_settings);
     notifyListeners();
+    try {
+      await _storage.saveSettings(_settings);
+    } catch (error) {
+      debugPrint('Could not save settings: $error');
+    }
   }
 
   Future<void> setThemeFamily(ThemeFamily family) {

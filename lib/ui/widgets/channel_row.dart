@@ -8,7 +8,7 @@ import 'channel_logo.dart';
 import 'wave.dart';
 
 /// Fixed height of [ChannelRow], so lists can use a fixed item extent.
-const double kChannelRowHeight = 88;
+const double kChannelRowHeight = 128;
 
 /// One channel in a list: logo, name, what is on, and the wave showing how far
 /// into it the channel is.
@@ -23,10 +23,14 @@ class ChannelRow extends StatelessWidget {
     required this.onTap,
     required this.onToggleFavorite,
     this.onOpenGuide,
+    this.next,
   });
 
   final Channel channel;
   final Programme? programme;
+
+  /// What follows [programme], shown under the progress wave.
+  final Programme? next;
   final DateTime now;
   final bool allowInsecure;
   final bool favorite;
@@ -137,10 +141,20 @@ class ChannelRow extends StatelessWidget {
                           current.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colors.subtext1,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colors.text,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
+                        if (current.subTitle != null)
+                          BidiText(
+                            current.subTitle!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colors.subtext0,
+                            ),
+                          ),
                         const SizedBox(height: 2),
                         WaveProgress(
                           progress: current.progressAt(now),
@@ -148,6 +162,19 @@ class ChannelRow extends StatelessWidget {
                           trackColor: colors.surface2,
                           height: 14,
                         ),
+                        if (next != null) ...<Widget>[
+                          const SizedBox(height: 2),
+                          BidiText(
+                            next!.subTitle == null
+                                ? '${strings.next} · ${next!.title}'
+                                : '${strings.next} · ${next!.title} — ${next!.subTitle}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colors.overlay1,
+                            ),
+                          ),
+                        ],
                       ] else
                         BidiText(
                           channel.group ?? strings.noProgrammeInfo,

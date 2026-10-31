@@ -184,6 +184,44 @@ class SettingsPage extends StatelessWidget {
                             '${strings.channelCount(state.channels.length)} · '
                             '${strings.programmeCount(state.epg.programmeCount)}',
                       ),
+                    const SizedBox(height: 6),
+                    _FieldLabel(text: strings.autoRefresh),
+                    DropdownButton<int>(
+                      isExpanded: true,
+                      value: const <int>[0, 30, 60, 180, 360, 720, 1440]
+                              .contains(settings.autoRefreshMinutes)
+                          ? settings.autoRefreshMinutes
+                          : 360,
+                      dropdownColor: colors.surface1,
+                      items: <DropdownMenuItem<int>>[
+                        for (final minutes in const <int>[
+                          0, 30, 60, 180, 360, 720, 1440,
+                        ])
+                          DropdownMenuItem<int>(
+                            value: minutes,
+                            child: Text(
+                              minutes == 0
+                                  ? strings.autoRefreshOff
+                                  : strings.autoRefreshEvery(minutes),
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          unawaited(
+                            state.updateSettings(
+                              settings.copyWith(autoRefreshMinutes: value),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    Text(
+                      strings.autoRefreshHelp,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colors.subtext0,
+                          ),
+                    ),
                     const SizedBox(height: 14),
                     Wrap(
                       spacing: 10,
@@ -609,7 +647,7 @@ class _PlayerSettings extends StatelessWidget {
                   value: loading
                       ? '…'
                       : capabilities == null
-                          ? strings.mpvMissing
+                          ? '${strings.mpvMissing}${MpvRuntime.lastProblem == null ? '' : '\n${MpvRuntime.lastProblem}'}'
                           : strings.mpvFound(
                               capabilities.version,
                               capabilities.bundled,

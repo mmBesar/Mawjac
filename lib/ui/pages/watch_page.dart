@@ -17,6 +17,7 @@ import '../widgets/channel_tile.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/warnings_panel.dart';
+import '../widgets/source_switcher.dart';
 import '../widgets/wave.dart';
 import 'channel_guide_page.dart';
 
@@ -116,7 +117,10 @@ class _WatchPageState extends State<WatchPage> {
                     sourceName: state.activeSource?.name ?? '',
                     loading: state.isLoading,
                     onRefresh: state.refresh,
-                    onOpenSources: widget.onOpenSources,
+                    onOpenSources: () => showSourceSwitcher(
+                      context,
+                      onManage: widget.onOpenSources,
+                    ),
                     padding: sidePadding,
                   ),
                 ),
@@ -205,6 +209,7 @@ class _WatchPageState extends State<WatchPage> {
                       return ChannelTile(
                         channel: channel,
                         programme: state.epg.nowFor(channel, state.now),
+                        next: state.epg.nextFor(channel, state.now),
                         now: state.now,
                         allowInsecure: allowInsecure,
                         favorite: state.isFavorite(channel),
@@ -269,6 +274,7 @@ class _WatchPageState extends State<WatchPage> {
     return ChannelRow(
       channel: channel,
       programme: state.epg.nowFor(channel, state.now),
+      next: state.epg.nextFor(channel, state.now),
       now: state.now,
       allowInsecure: allowInsecure,
       favorite: state.isFavorite(channel),

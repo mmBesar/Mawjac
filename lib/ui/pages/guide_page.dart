@@ -27,9 +27,11 @@ class GuidePage extends StatefulWidget {
 }
 
 class _GuidePageState extends State<GuidePage> {
-  static const double _pxPerMinute = 5;
-  static const double _rowHeight = 72;
-  static const double _channelWidth = 104;
+  static const double _minZoom = 2.5;
+  static const double _maxZoom = 12;
+  static const double _rowHeight = 96;
+  static const double _nameBand = 22;
+  static const double _channelWidth = 80;
   static const double _headerHeight = 40;
   static const int _spanMinutes = 12 * 60;
   static const double _bottomPadding = 110;
@@ -38,6 +40,8 @@ class _GuidePageState extends State<GuidePage> {
   final ScrollController _leftVertical = ScrollController();
   final ScrollController _rightVertical = ScrollController();
 
+  /// Pixels per minute of the timeline; the slider changes it.
+  double _zoom = 5;
   bool _syncing = false;
   bool _favoritesOnly = false;
   bool _scrolledToNow = false;
@@ -86,9 +90,25 @@ class _GuidePageState extends State<GuidePage> {
     _syncing = false;
   }
 
+  /// Changes the zoom and keeps the minute at the left edge where it was.
+  void _setZoom(double value) {
+    final old = _zoom;
+    final leftMinutes = _horizontal.hasClients ? _horizontal.offset / old : 0.0;
+    setState(() => _zoom = value);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_horizontal.hasClients) {
+        _horizontal.jumpTo(
+          (leftMinutes * value)
+              .clamp(0.0, _horizontal.position.maxScrollExtent)
+              .toDouble(),
+        );
+      }
+    });
+  }
+
   double _nowOffset(DateTime now) {
     final minutes = now.difference(_windowStart).inSeconds / 60;
-    return minutes * _pxPerMinute;
+    return minutes * _zoom;
   }
 
   void _scrollToNow(DateTime now, {bool animate = false}) {
@@ -140,7 +160,7 @@ class _GuidePageState extends State<GuidePage> {
     final windowEnd = _windowStart.add(const Duration(minutes: _spanMinutes));
     final use24 = state.settings.use24HourTime;
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
-    const gridWidth = _spanMinutes * _pxPerMinute;
+    final gridWidth = _spanMinutes * _zoom;
     final nowX = _nowOffset(state.now);
 
     if (!_scrolledToNow) {
@@ -185,6 +205,35 @@ class _GuidePageState extends State<GuidePage> {
                   icon: const Icon(Icons.my_location_rounded, size: 18),
                   label: Text(strings.guideNow),
                 ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.zoom_out_rounded, size: 20, color: colors.subtext0),
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 4,
+                      activeTrackColor: colors.accent,
+                      inactiveTrackColor: colors.surface2,
+                      thumbColor: colors.accent,
+                      overlayColor: colors.accent.withValues(alpha: 0.16),
+                      thumbShape:
+                          const RoundSliderThumbShape(enabledThumbRadius: 8),
+                      trackShape: const RoundedRectSliderTrackShape(),
+                    ),
+                    child: Slider(
+                      min: _minZoom,
+                      max: _maxZoom,
+                      value: _zoom,
+                      onChanged: _setZoom,
+                    ),
+                  ),
+                ),
+                Icon(Icons.zoom_in_rounded, size: 20, color: colors.subtext0),
               ],
             ),
           ),
@@ -243,7 +292,7 @@ class _GuidePageState extends State<GuidePage> {
                                 use24: use24,
                                 nowX: nowX,
                                 height: _headerHeight,
-                                pxPerMinute: _pxPerMinute,
+                                pxPerMinute: _zoom,
                                 spanMinutes: _spanMinutes,
                               ),
                               Expanded(
@@ -313,9 +362,9 @@ class _GuidePageState extends State<GuidePage> {
           programme.start.difference(_windowStart).inSeconds / 60;
       final stopMinutes =
           programme.stop.difference(_windowStart).inSeconds / 60;
-      final left = math.max(0.0, startMinutes) * _pxPerMinute;
+      final left = math.max(0.0, startMinutes) * _zoom;
       final right =
-          math.min(_spanMinutes.toDouble(), stopMinutes) * _pxPerMinute;
+          math.min(_spanMinutes.toDouble(), stopMinutes) * _zoom;
       final width = right - left - 3;
       if (width < 8) {
         continue;
@@ -324,7 +373,7 @@ class _GuidePageState extends State<GuidePage> {
         Positioned(
           left: left,
           width: width,
-          top: 6,
+          top: _nameBand,
           bottom: 6,
           child: _Block(
             programme: programme,
@@ -349,7 +398,37 @@ class _GuidePageState extends State<GuidePage> {
           bottom: BorderSide(color: colors.surface0.withValues(alpha: 0.5)),
         ),
       ),
-      child: Stack(children: blocks),
+      child: Stack(
+        children: <Widget>[
+          ...blocks,
+          // The channel name rides along the left edge of the visible
+          // timeline, so each row says whose it is wherever you scroll.
+          AnimatedBuilder(
+            animation: _horizontal,
+            builder: (context, _) {
+              final offset = _horizontal.hasClients ? _horizontal.offset : 0.0;
+              return Positioned(
+                left: offset + 8,
+                top: 3,
+                child: IgnorePointer(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 240),
+                    child: BidiText(
+                      channel.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: colors.subtext0,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
@@ -445,23 +524,28 @@ class _ChannelCell extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              ChannelLogo(
-                channel: channel,
-                allowInsecure: allowInsecure,
-                size: 34,
-                radius: 10,
-              ),
-              const SizedBox(height: 4),
-              BidiText(
-                channel.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: colors.subtext1,
-                  fontWeight: FontWeight.w600,
+              Tooltip(
+                message: channel.name,
+                child: ChannelLogo(
+                  channel: channel,
+                  allowInsecure: allowInsecure,
+                  size: 52,
+                  radius: 14,
                 ),
               ),
+              if (channel.logoUrl == null || channel.logoUrl!.isEmpty) ...<Widget>[
+                const SizedBox(height: 4),
+                BidiText(
+                  channel.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colors.subtext1,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -522,6 +606,16 @@ class _Block extends StatelessWidget {
                         height: 1.2,
                       ),
                     ),
+                    if (roomy && programme.subTitle != null)
+                      BidiText(
+                        programme.subTitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colors.subtext0,
+                          height: 1.25,
+                        ),
+                      ),
                     if (roomy)
                       Text(
                         range,
