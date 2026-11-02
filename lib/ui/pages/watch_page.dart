@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -16,6 +17,8 @@ import '../widgets/channel_row.dart';
 import '../widgets/channel_tile.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_banner.dart';
+import '../widgets/page_search.dart';
+import '../widgets/programme_hit_tile.dart';
 import '../widgets/source_switcher.dart';
 import '../widgets/warnings_panel.dart';
 import '../widgets/wave.dart';
@@ -23,9 +26,16 @@ import 'channel_guide_page.dart';
 
 /// The home screen: what is on now, then every channel.
 class WatchPage extends StatefulWidget {
-  const WatchPage({super.key, required this.onOpenSources});
+  const WatchPage({
+    super.key,
+    required this.onOpenSources,
+    this.searchRequests,
+  });
 
   final VoidCallback onOpenSources;
+
+  /// Each change opens the search field (Ctrl+F).
+  final ValueListenable<int>? searchRequests;
 
   @override
   State<WatchPage> createState() => _WatchPageState();
@@ -37,6 +47,28 @@ class _WatchPageState extends State<WatchPage> {
   static const String _favorites = '\u0000fav';
 
   String _filter = _all;
+  final PageSearch _search = PageSearch();
+
+  @override
+  void initState() {
+    super.initState();
+    _search.addListener(_onSearch);
+    widget.searchRequests?.addListener(_search.open);
+  }
+
+  @override
+  void dispose() {
+    widget.searchRequests?.removeListener(_search.open);
+    _search.removeListener(_onSearch);
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _onSearch() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   List<Channel> _heroChannels(AppState state) {
     final seen = <String>{};
@@ -59,6 +91,9 @@ class _WatchPageState extends State<WatchPage> {
   }
 
   List<Channel> _visible(AppState state) {
+    if (_search.isSearching) {
+      return state.searchChannels(_search.query);
+    }
     if (_filter == _favorites) {
       return state.favorites;
     }
@@ -93,6 +128,10 @@ class _WatchPageState extends State<WatchPage> {
     }
 
     final channels = _visible(state);
+    final searching = _search.isSearching;
+    final hits = searching
+        ? state.searchProgrammes(_search.query)
+        : const <ProgrammeHit>[];
     final loadingFirst = state.isLoading && state.channels.isEmpty;
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
     final hero = state.channels.isEmpty
@@ -117,12 +156,19 @@ class _WatchPageState extends State<WatchPage> {
                     sourceName: state.activeSource?.name ?? '',
                     loading: state.isLoading,
                     onRefresh: state.refresh,
+                    search: _search,
                     onOpenSources: () => showSourceSwitcher(
                       context,
                       onManage: widget.onOpenSources,
                     ),
                     padding: sidePadding,
                   ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: PageSearchField(
+                  search: _search,
+                  hint: strings.searchHint,
                 ),
               ),
               if (state.error != null && state.channels.isEmpty)
@@ -136,7 +182,7 @@ class _WatchPageState extends State<WatchPage> {
               SliverToBoxAdapter(
                 child: WarningsPanel(warnings: state.warnings),
               ),
-              if (hero.isNotEmpty)
+              if (hero.isNotEmpty && !searching)
                 SliverToBoxAdapter(
                   child: _HeroStrip(
                     channels: hero,
@@ -150,7 +196,8 @@ class _WatchPageState extends State<WatchPage> {
                             .toDouble(),
                   ),
                 ),
-              if (state.groups.isNotEmpty || state.favorites.isNotEmpty)
+              if (!searching &&
+                  (state.groups.isNotEmpty || state.favorites.isNotEmpty))
                 SliverToBoxAdapter(
                   child: _FilterBar(
                     padding: sidePadding,
@@ -183,6 +230,17 @@ class _WatchPageState extends State<WatchPage> {
                     onSecondary: widget.onOpenSources,
                   ),
                 )
+              else if (searching && channels.isEmpty && hits.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: EmptyState(
+                    icon: Icons.search_off_rounded,
+                    title: strings.noResultsTitle,
+                    body: strings.noResultsBody(_search.query),
+                  ),
+                )
+              else if (searching && channels.isEmpty)
+                const SliverToBoxAdapter(child: SizedBox.shrink())
               else if (channels.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -258,6 +316,36 @@ class _WatchPageState extends State<WatchPage> {
                     },
                   ),
                 ),
+              if (searching && hits.isNotEmpty)
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(sidePadding, 8, sidePadding, 120),
+                  sliver: SliverMainAxisGroup(
+                    slivers: <Widget>[
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(4, 10, 4, 10),
+                          child: Text(
+                            strings.programmesLabel,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(
+                                  color: colors.subtext0,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
+                      ),
+                      SliverList.builder(
+                        itemCount: hits.length,
+                        itemBuilder: (context, index) => ProgrammeHitTile(
+                          hit: hits[index],
+                          now: state.now,
+                          use24: state.settings.use24HourTime,
+                          allowInsecure: allowInsecure,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           );
         },
@@ -292,6 +380,7 @@ class _Header extends StatelessWidget {
     required this.onRefresh,
     required this.onOpenSources,
     required this.padding,
+    required this.search,
   });
 
   final String sourceName;
@@ -299,6 +388,7 @@ class _Header extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final VoidCallback onOpenSources;
   final double padding;
+  final PageSearch search;
 
   @override
   Widget build(BuildContext context) {
@@ -341,6 +431,7 @@ class _Header extends StatelessWidget {
                 backgroundColor: colors.surface0.withValues(alpha: 0.6),
               ),
             ),
+          PageSearchButton(search: search),
           IconButton(
             tooltip: strings.refresh,
             onPressed: loading ? null : () => unawaited(onRefresh()),

@@ -45,6 +45,8 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   _Phase _phase = _Phase.starting;
   String? _decoder;
   int _generation = 0;
+  int _autoRetries = 0;
+  Timer? _retryTimer;
   MpvSession? _lastSession;
   DateTime _startedAt = DateTime.now();
 
@@ -62,7 +64,11 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     unawaited(_start());
   }
 
-  Future<void> _start() async {
+  Future<void> _start({bool automatic = false}) async {
+    if (!automatic) {
+      _autoRetries = 0;
+    }
+    _retryTimer?.cancel();
     final state = context.read<AppState>();
     final settings = state.settings;
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
@@ -120,8 +126,22 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     }
     _decoderTimer?.cancel();
     _session = null;
-    final quick = DateTime.now().difference(_startedAt) <
-        const Duration(seconds: 6);
+    final sinceStart = DateTime.now().difference(_startedAt);
+    // A channel the server is still starting makes mpv fail at once and work
+    // a moment later: try again a few times before reporting an error.
+    if (code != 0 &&
+        sinceStart < const Duration(seconds: 25) &&
+        _autoRetries < 3) {
+      _autoRetries++;
+      setState(() => _phase = _Phase.starting);
+      _retryTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) {
+          unawaited(_start(automatic: true));
+        }
+      });
+      return;
+    }
+    final quick = sinceStart < const Duration(seconds: 6);
     if (code == 0 && !quick) {
       // The person closed the player window: go back to the list.
       Navigator.of(context).maybePop();
@@ -210,6 +230,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   void dispose() {
     _generation++;
     _decoderTimer?.cancel();
+    _retryTimer?.cancel();
     _lifecycle?.dispose();
     final session = _session;
     _session = null;

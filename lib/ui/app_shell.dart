@@ -11,7 +11,6 @@ import '../data/app_state.dart';
 import '../l10n/strings.dart';
 import 'pages/favorites_page.dart';
 import 'pages/guide_page.dart';
-import 'pages/search_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/sources_page.dart';
 import 'pages/watch_page.dart';
@@ -26,7 +25,12 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
-  final ValueNotifier<int> _searchFocus = ValueNotifier<int>(0);
+  // One request counter per searchable page (Watch, Favorites, Guide).
+  final List<ValueNotifier<int>> _searchRequests = <ValueNotifier<int>>[
+    ValueNotifier<int>(0),
+    ValueNotifier<int>(0),
+    ValueNotifier<int>(0),
+  ];
   final PageController _pageController = PageController();
 
   @override
@@ -42,7 +46,9 @@ class _AppShellState extends State<AppShell> {
     if (kIsDesktop) {
       HardwareKeyboard.instance.removeHandler(_onKey);
     }
-    _searchFocus.dispose();
+    for (final notifier in _searchRequests) {
+      notifier.dispose();
+    }
     _pageController.dispose();
     super.dispose();
   }
@@ -58,8 +64,12 @@ class _AppShellState extends State<AppShell> {
         ),
       );
     }
-    if (index == 3) {
-      _searchFocus.value++;
+  }
+
+  /// Opens the search of the page that is showing.
+  void _searchHere() {
+    if (_index < _searchRequests.length) {
+      _searchRequests[_index].value++;
     }
   }
 
@@ -94,7 +104,7 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  /// Ctrl+1..5 switch tab, Ctrl+F / Ctrl+K search, Ctrl+R refresh. This is a
+  /// Ctrl+1..4 switch tab, Ctrl+F / Ctrl+K search, Ctrl+R refresh. This is a
   /// global handler so it works wherever keyboard focus happens to be, and
   /// stays quiet while another page (the player, a sheet) is on top.
   bool _onKey(KeyEvent event) {
@@ -113,7 +123,6 @@ class _AppShellState extends State<AppShell> {
       LogicalKeyboardKey.digit2,
       LogicalKeyboardKey.digit3,
       LogicalKeyboardKey.digit4,
-      LogicalKeyboardKey.digit5,
     ];
     final tab = tabs.indexOf(key);
     if (tab >= 0) {
@@ -121,7 +130,7 @@ class _AppShellState extends State<AppShell> {
       return true;
     }
     if (key == LogicalKeyboardKey.keyF || key == LogicalKeyboardKey.keyK) {
-      _goTo(3);
+      _searchHere();
       return true;
     }
     if (key == LogicalKeyboardKey.keyR) {
@@ -148,28 +157,29 @@ class _AppShellState extends State<AppShell> {
     final colors = context.mawjColors;
 
     final pages = <Widget>[
-      WatchPage(onOpenSources: _openSources),
-      const FavoritesPage(),
+      WatchPage(
+        onOpenSources: _openSources,
+        searchRequests: _searchRequests[0],
+      ),
+      FavoritesPage(searchRequests: _searchRequests[1]),
       GuidePage(
         onOpenSources: _openSources,
         onEdgeDrag: kIsDesktop ? null : _edgeDrag,
         onEdgeDragEnd: kIsDesktop ? null : _edgeDragEnd,
+        searchRequests: _searchRequests[2],
       ),
-      SearchPage(focusRequests: _searchFocus),
       SettingsPage(onOpenSources: _openSources),
     ];
     final labels = <String>[
       strings.watch,
       strings.favorites,
       strings.guide,
-      strings.search,
       strings.settings,
     ];
     const icons = <IconData>[
       Icons.live_tv_rounded,
       Icons.star_rounded,
       Icons.calendar_month_rounded,
-      Icons.search_rounded,
       Icons.tune_rounded,
     ];
 

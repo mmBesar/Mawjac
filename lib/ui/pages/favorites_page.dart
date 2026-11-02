@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -12,11 +13,44 @@ import '../player_page.dart';
 import '../widgets/channel_row.dart';
 import '../widgets/channel_tile.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/page_search.dart';
+import '../widgets/programme_hit_tile.dart';
 import 'channel_guide_page.dart';
 
 /// Favorites on their own page, with what was watched last underneath.
-class FavoritesPage extends StatelessWidget {
-  const FavoritesPage({super.key});
+class FavoritesPage extends StatefulWidget {
+  const FavoritesPage({super.key, this.searchRequests});
+
+  /// Each change opens the search field (Ctrl+F).
+  final ValueListenable<int>? searchRequests;
+
+  @override
+  State<FavoritesPage> createState() => _FavoritesPageState();
+}
+
+class _FavoritesPageState extends State<FavoritesPage> {
+  final PageSearch _search = PageSearch();
+
+  @override
+  void initState() {
+    super.initState();
+    _search.addListener(_onSearch);
+    widget.searchRequests?.addListener(_search.open);
+  }
+
+  @override
+  void dispose() {
+    widget.searchRequests?.removeListener(_search.open);
+    _search.removeListener(_onSearch);
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _onSearch() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,11 +59,31 @@ class FavoritesPage extends StatelessWidget {
     final colors = context.mawjColors;
     final theme = Theme.of(context);
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
-    final favorites = state.favorites;
-    final favoriteIds = favorites.map((channel) => channel.id).toSet();
-    final recents = state.recents
-        .where((channel) => !favoriteIds.contains(channel.id))
-        .toList(growable: false);
+    final searching = _search.isSearching;
+    final allFavorites = state.favorites;
+    final favoriteIds = allFavorites.map((channel) => channel.id).toSet();
+    // Searching here means searching your favorites: their names, and what
+    // is on them.
+    final matching = searching
+        ? state.searchChannels(_search.query).map((c) => c.id).toSet()
+        : const <String>{};
+    final favorites = searching
+        ? allFavorites
+            .where((channel) => matching.contains(channel.id))
+            .toList(growable: false)
+        : allFavorites;
+    final hits = searching
+        ? state
+            .searchProgrammes(_search.query, limit: 400)
+            .where((hit) => favoriteIds.contains(hit.channel.id))
+            .take(60)
+            .toList(growable: false)
+        : const <ProgrammeHit>[];
+    final recents = searching
+        ? const <Channel>[]
+        : state.recents
+            .where((channel) => !favoriteIds.contains(channel.id))
+            .toList(growable: false);
 
     Widget item(Channel channel) {
       final programme = state.epg.nowFor(channel, state.now);
@@ -104,16 +158,35 @@ class FavoritesPage extends StatelessWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
-              child: Text(
-                strings.favorites,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.3,
-                ),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      strings.favorites,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ),
+                  PageSearchButton(search: _search),
+                ],
               ),
             ),
           ),
-          if (favorites.isEmpty && recents.isEmpty)
+          SliverToBoxAdapter(
+            child: PageSearchField(search: _search, hint: strings.searchHint),
+          ),
+          if (searching && favorites.isEmpty && hits.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: EmptyState(
+                icon: Icons.search_off_rounded,
+                title: strings.noResultsTitle,
+                body: strings.noResultsBody(_search.query),
+              ),
+            )
+          else if (allFavorites.isEmpty && recents.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
               child: EmptyState(
@@ -130,6 +203,32 @@ class FavoritesPage extends StatelessWidget {
                   if (favorites.isNotEmpty) section(strings.favorites, favorites),
                   if (recents.isNotEmpty)
                     section(strings.recentlyWatched, recents),
+                  if (hits.isNotEmpty)
+                    SliverMainAxisGroup(
+                      slivers: <Widget>[
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(4, 18, 4, 10),
+                            child: Text(
+                              strings.programmesLabel,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: colors.subtext0,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SliverList.builder(
+                          itemCount: hits.length,
+                          itemBuilder: (context, index) => ProgrammeHitTile(
+                            hit: hits[index],
+                            now: state.now,
+                            use24: state.settings.use24HourTime,
+                            allowInsecure: allowInsecure,
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),

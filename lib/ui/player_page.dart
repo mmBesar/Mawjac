@@ -85,7 +85,13 @@ class _PlayerPageState extends State<PlayerPage> {
   ].join(',');
 
   /// How long to wait for the first video frame before saying so.
-  static const Duration _stallAfter = Duration(seconds: 15);
+  static const Duration _stallAfter = Duration(seconds: 30);
+
+  /// A channel that is still starting on the server often fails the first
+  /// open and works a moment later. Failures before any video are retried this
+  /// many times, a few seconds apart, before an error is shown.
+  static const int _maxAutoRetries = 3;
+  static const Duration _retryDelay = Duration(seconds: 4);
 
   /// Controls fade out after this long while a stream is playing.
   static const Duration _controlsTimeout = Duration(seconds: 4);
@@ -127,6 +133,9 @@ class _PlayerPageState extends State<PlayerPage> {
   StreamSubscription<VideoParams>? _videoParamsSubscription;
   StreamSubscription<bool>? _bufferingSubscription;
   StreamSubscription<double>? _volumeSubscription;
+  StreamSubscription<Duration>? _positionSubscription;
+  Timer? _retryTimer;
+  int _autoRetries = 0;
   StreamSubscription<PlayerLog>? _logSubscription;
   Timer? _stallTimer;
   Timer? _hideTimer;
@@ -176,10 +185,35 @@ class _PlayerPageState extends State<PlayerPage> {
     _volume = _player.state.volume;
 
     _errorSubscription = _player.stream.error.listen((message) {
-      if (!mounted || message.trim().isEmpty) {
+      if (!mounted || message.trim().isEmpty || _hasVideo) {
+        return;
+      }
+      if (_autoRetries < _maxAutoRetries) {
+        _autoRetries++;
+        _retryTimer?.cancel();
+        _retryTimer = Timer(_retryDelay, () {
+          if (mounted && !_hasVideo) {
+            unawaited(_open(automatic: true));
+          }
+        });
         return;
       }
       setState(() => _error = message.trim());
+    });
+    _positionSubscription = _player.stream.position.listen((position) {
+      // Real playback clears any error or "still waiting" message at once.
+      if (!mounted || position <= Duration.zero) {
+        return;
+      }
+      if (_error != null || _stalled || !_hasVideo) {
+        _stallTimer?.cancel();
+        _retryTimer?.cancel();
+        setState(() {
+          _error = null;
+          _stalled = false;
+          _hasVideo = true;
+        });
+      }
     });
     _playingSubscription = _player.stream.playing.listen((playing) {
       if (!mounted) {
@@ -211,6 +245,7 @@ class _PlayerPageState extends State<PlayerPage> {
       final hasSize = (params.w ?? 0) > 0 && (params.h ?? 0) > 0;
       if (hasSize && mounted && !_hasVideo) {
         _stallTimer?.cancel();
+        _retryTimer?.cancel();
         setState(() {
           _hasVideo = true;
           _stalled = false;
@@ -256,7 +291,11 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
-  Future<void> _open() async {
+  Future<void> _open({bool automatic = false}) async {
+    if (!automatic) {
+      _autoRetries = 0;
+    }
+    _retryTimer?.cancel();
     final state = context.read<AppState>();
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
     _stallTimer?.cancel();
@@ -685,6 +724,8 @@ class _PlayerPageState extends State<PlayerPage> {
     _stallTimer?.cancel();
     _hideTimer?.cancel();
     _osdTimer?.cancel();
+    _retryTimer?.cancel();
+    _positionSubscription?.cancel();
     _errorSubscription?.cancel();
     _playingSubscription?.cancel();
     _bufferingSubscription?.cancel();

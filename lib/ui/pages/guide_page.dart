@@ -1,9 +1,11 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/bidi.dart';
+import '../../core/text.dart';
 import '../../core/theme.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
@@ -11,6 +13,7 @@ import '../../l10n/strings.dart';
 import '../player_page.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/page_search.dart';
 import '../widgets/programme_sheet.dart';
 import '../widgets/warnings_panel.dart';
 import 'channel_guide_page.dart';
@@ -23,6 +26,7 @@ class GuidePage extends StatefulWidget {
     required this.onOpenSources,
     this.onEdgeDrag,
     this.onEdgeDragEnd,
+    this.searchRequests,
   });
 
   final VoidCallback onOpenSources;
@@ -31,6 +35,9 @@ class GuidePage extends StatefulWidget {
   /// app can turn it into a page swipe. Null where pages do not swipe.
   final ValueChanged<double>? onEdgeDrag;
   final VoidCallback? onEdgeDragEnd;
+
+  /// Each change opens the search field (Ctrl+F).
+  final ValueListenable<int>? searchRequests;
 
   @override
   State<GuidePage> createState() => _GuidePageState();
@@ -53,6 +60,8 @@ class _GuidePageState extends State<GuidePage> {
 
   /// Pixels per minute of the timeline; the slider changes it.
   double _zoom = 6.75;
+  final PageSearch _search = PageSearch();
+  double _viewport = 360;
   bool _syncing = false;
   bool _favoritesOnly = false;
   bool _scrolledToNow = false;
@@ -62,12 +71,29 @@ class _GuidePageState extends State<GuidePage> {
   void initState() {
     super.initState();
     _windowStart = _windowStartFor(DateTime.now());
+    _search.addListener(_onSearch);
+    widget.searchRequests?.addListener(_search.open);
     _leftVertical.addListener(() => _sync(_leftVertical, _rightVertical));
     _rightVertical.addListener(() => _sync(_rightVertical, _leftVertical));
   }
 
+  void _onSearch() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  static bool _matches(Programme programme, String needle) {
+    return normalizeForSearch(
+      '${programme.title} ${programme.subTitle ?? ''}',
+    ).contains(needle);
+  }
+
   @override
   void dispose() {
+    widget.searchRequests?.removeListener(_search.open);
+    _search.removeListener(_onSearch);
+    _search.dispose();
     _horizontal.dispose();
     _leftVertical.dispose();
     _rightVertical.dispose();
@@ -167,10 +193,24 @@ class _GuidePageState extends State<GuidePage> {
       _scrolledToNow = false;
     }
 
-    final channels = _favoritesOnly && state.favorites.isNotEmpty
+    final windowEnd = _windowStart.add(Duration(minutes: _spanMinutes));
+    final base = _favoritesOnly && state.favorites.isNotEmpty
         ? state.favorites
         : state.channels;
-    final windowEnd = _windowStart.add(Duration(minutes: _spanMinutes));
+    // Searching the guide keeps the channels whose name matches or that air a
+    // matching programme in the window; matching bars light up, the rest dim.
+    final needle =
+        _search.isSearching ? normalizeForSearch(_search.query) : '';
+    final channels = needle.isEmpty
+        ? base
+        : base.where((channel) {
+            if (normalizeForSearch(channel.name).contains(needle)) {
+              return true;
+            }
+            return state.epg
+                .forWindow(channel, _windowStart, windowEnd)
+                .any((programme) => _matches(programme, needle));
+          }).toList(growable: false);
     final use24 = state.settings.use24HourTime;
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
     final gridWidth = _spanMinutes * _zoom;
@@ -203,6 +243,7 @@ class _GuidePageState extends State<GuidePage> {
                     ),
                   ),
                 ),
+                PageSearchButton(search: _search),
                 IconButton(
                   tooltip: strings.guideFavoritesOnly,
                   isSelected: _favoritesOnly,
@@ -221,6 +262,7 @@ class _GuidePageState extends State<GuidePage> {
               ],
             ),
           ),
+          PageSearchField(search: _search, hint: strings.searchHint),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
             child: Row(
@@ -296,7 +338,10 @@ class _GuidePageState extends State<GuidePage> {
                       ),
                     ),
                     Expanded(
-                      child: NotificationListener<ScrollNotification>(
+                      child: LayoutBuilder(
+                        builder: (context, viewportBox) {
+                          _viewport = viewportBox.maxWidth;
+                          return NotificationListener<ScrollNotification>(
                         onNotification: (notification) {
                           if (notification.depth != 0) {
                             return false;
@@ -342,6 +387,7 @@ class _GuidePageState extends State<GuidePage> {
                                           channels[index],
                                           windowEnd,
                                           use24,
+                                          needle,
                                         );
                                       },
                                     ),
@@ -366,6 +412,8 @@ class _GuidePageState extends State<GuidePage> {
                           ),
                         ),
                         ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -383,6 +431,7 @@ class _GuidePageState extends State<GuidePage> {
     Channel channel,
     DateTime windowEnd,
     bool use24,
+    String needle,
   ) {
     final colors = context.mawjColors;
     final strings = context.strings;
@@ -408,6 +457,12 @@ class _GuidePageState extends State<GuidePage> {
           bottom: 6,
           child: _Block(
             programme: programme,
+            blockLeft: left,
+            blockWidth: width,
+            scroll: _horizontal,
+            viewport: _viewport,
+            match: needle.isNotEmpty && _matches(programme, needle),
+            dim: needle.isNotEmpty && !_matches(programme, needle),
             live: programme.isLiveAt(state.now),
             range: strings.formatRange(
               programme.start,
@@ -604,6 +659,12 @@ class _Block extends StatelessWidget {
     required this.live,
     required this.range,
     required this.onTap,
+    required this.blockLeft,
+    required this.blockWidth,
+    required this.scroll,
+    required this.viewport,
+    this.match = false,
+    this.dim = false,
   });
 
   final Programme programme;
@@ -611,71 +672,114 @@ class _Block extends StatelessWidget {
   final String range;
   final VoidCallback onTap;
 
+  /// Where the bar starts on the timeline and how wide it is, in pixels.
+  final double blockLeft;
+  final double blockWidth;
+
+  /// The timeline's horizontal scroll, and the width of what is visible.
+  final ScrollController scroll;
+  final double viewport;
+
+  /// While searching: this programme matches, or does not.
+  final bool match;
+  final bool dim;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.mawjColors;
     final theme = Theme.of(context);
-    return Material(
-      color: live ? colors.accentSoft : colors.surface0.withValues(alpha: 0.75),
-      borderRadius: BorderRadius.circular(14),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: live
-                ? Border.all(color: colors.accent.withValues(alpha: 0.7))
-                : null,
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth < 48) {
-                return const SizedBox.shrink();
-              }
-              final roomy = constraints.maxWidth >= 120;
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
+    return Opacity(
+      opacity: dim ? 0.38 : 1,
+      child: Material(
+        color: live
+            ? colors.accentSoft
+            : colors.surface0.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: match
+                  ? Border.all(color: colors.accent, width: 2)
+                  : (live
+                      ? Border.all(color: colors.accent.withValues(alpha: 0.7))
+                      : null),
+            ),
+            // The text rides along: it sits in the part of the bar that is
+            // on screen, so a long programme stays readable as you scroll
+            // through it or zoom in.
+            child: AnimatedBuilder(
+              animation: scroll,
+              builder: (context, _) {
+                final offset = scroll.hasClients ? scroll.offset : 0.0;
+                final visibleLeft = math.max(blockLeft, offset);
+                final visibleRight = math.min(
+                  blockLeft + blockWidth,
+                  offset + viewport,
+                );
+                final span = visibleRight - visibleLeft;
+                if (span < 48) {
+                  return const SizedBox.expand();
+                }
+                final roomy = span >= 120;
+                return Stack(
                   children: <Widget>[
-                    BidiText(
-                      programme.title,
-                      maxLines: roomy ? 1 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: live ? colors.text : colors.subtext1,
-                        fontWeight: FontWeight.w700,
-                        height: 1.2,
-                      ),
-                    ),
-                    if (roomy && programme.subTitle != null)
-                      BidiText(
-                        programme.subTitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: colors.subtext0,
-                          height: 1.25,
+                    Positioned(
+                      left: visibleLeft - blockLeft,
+                      width: span,
+                      top: 0,
+                      bottom: 0,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
                         ),
-                      ),
-                    if (roomy)
-                      Text(
-                        range,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: live ? colors.accent : colors.overlay1,
-                          fontFeatures: const <FontFeature>[
-                            FontFeature.tabularFigures(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[
+                            BidiText(
+                              programme.title,
+                              maxLines: roomy ? 1 : 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: live ? colors.text : colors.subtext1,
+                                fontWeight: FontWeight.w700,
+                                height: 1.2,
+                              ),
+                            ),
+                            if (roomy && programme.subTitle != null)
+                              BidiText(
+                                programme.subTitle!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: colors.subtext0,
+                                  height: 1.25,
+                                ),
+                              ),
+                            if (roomy)
+                              Text(
+                                range,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: live ? colors.accent : colors.overlay1,
+                                  fontFeatures: const <FontFeature>[
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
                       ),
+                    ),
                   ],
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),
