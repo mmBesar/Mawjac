@@ -13,6 +13,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/app_info.dart';
 import '../core/bidi.dart';
+import '../core/network_image.dart';
 import '../core/platform.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
