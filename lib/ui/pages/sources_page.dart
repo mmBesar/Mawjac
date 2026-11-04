@@ -236,7 +236,9 @@ class _SourceCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 3),
                           BidiText(
-                            _locationLabel(source.m3u),
+                            source.isService
+                                ? source.baseUrl
+                                : _locationLabel(source.m3u),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
@@ -288,6 +290,13 @@ class _SourceCard extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: <Widget>[
+                    if (source.isService)
+                      _InfoChip(
+                        icon: Icons.dns_rounded,
+                        label: source.type == SourceType.tunarr
+                            ? 'Tunarr'
+                            : 'ErsatzTV',
+                      ),
                     _InfoChip(
                       icon: Icons.playlist_play_rounded,
                       label: source.m3u.isFile ? strings.file : strings.url,

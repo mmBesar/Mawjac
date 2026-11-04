@@ -81,9 +81,9 @@ class ProgrammeHitTile extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      if (programme.subTitle != null)
+                      if (programme.subtitleLine != null)
                         BidiText(
-                          programme.subTitle!,
+                          programme.subtitleLine!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(

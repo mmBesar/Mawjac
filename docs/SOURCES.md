@@ -4,6 +4,18 @@ Mawjac reads one M3U/M3U8 playlist and one XMLTV guide per source. Locations may
 be HTTP(S) URLs or local files, and playlists may reference relative stream and
 logo URLs.
 
+## Source types
+
+When adding a source, pick one of three types:
+
+- **M3U + XMLTV**: enter the playlist and guide yourself (URL or file).
+- **Tunarr**: enter only the service address, e.g. `http://192.168.1.10:8000`.
+  Mawjac uses `<address>/api/channels.m3u` and `<address>/api/xmltv.xml`.
+- **ErsatzTV**: enter only the service address. Mawjac uses
+  `<address>/iptv/channels.m3u` and `<address>/iptv/xmltv.xml`.
+
+A bare host such as `tv.lan:8409` is treated as `http://tv.lan:8409`.
+
 ## Tunarr example
 
 A typical self-hosted Tunarr source looks like this:

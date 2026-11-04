@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- Desktop: the default player is now inside the app window and uses the GPU, with a set-top-box style on-screen display: channel banner with now/next and progress, volume panel, a channel and group browser (C or Enter), number entry, keyboard shortcuts (H), aspect ratio, deinterlace, audio delay and diagnostics. A CPU renderer is available in Settings as a fallback. The system mpv window is optional and now runs with your own default mpv config.
+- Audio and subtitle tracks: choose them in the player (S or the button), in the mpv remote, and set preferred languages in Settings. The choice is remembered per channel.
+- Sources: Tunarr and ErsatzTV only need the service address; the playlist and guide URLs are derived. Existing sources keep working.
+- Guide data is richer: episode number (`S01E05`) shown with the sub-title everywhere, description, cast and crew, date, length, rating, keywords, repeat marker and landscape stills.
+- Android: releases are signed with your own key when the signing secrets are set (see docs/BUILDING.md). An APK signed with the debug key cannot be updated by the signed one; uninstall once.
+- Linux packages include AppStream metadata.
+
 ## 0.3.0
 
 - Search moved into each page: Watch, Favorites and Guide each have a search icon (Ctrl+F opens the one you are on). Watch and Favorites show matching channels and programmes with artwork and sub-titles; in the Guide, matching programmes light up and the rest dim.

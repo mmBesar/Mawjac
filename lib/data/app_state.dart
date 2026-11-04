@@ -44,6 +44,7 @@ class AppState extends ChangeNotifier {
   bool _initialLoadStarted = false;
   List<String> _favorites = <String>[];
   List<String> _recents = <String>[];
+  Map<String, String> _tracks = <String, String>{};
   Map<String, Channel> _channelById = const <String, Channel>{};
   List<String> _groups = const <String>[];
 
@@ -174,6 +175,39 @@ class AppState extends ChangeNotifier {
     final id = activeSource?.id;
     _favorites = id == null ? <String>[] : _storage.loadFavorites(id);
     _recents = id == null ? <String>[] : _storage.loadRecents(id);
+    _tracks = id == null ? <String, String>{} : _storage.loadTracks(id);
+  }
+
+  Future<void> setPreferredAudioLang(String value) =>
+      updateSettings(_settings.copyWith(preferredAudioLang: value));
+
+  Future<void> setPreferredSubtitleLang(String value) =>
+      updateSettings(_settings.copyWith(preferredSubtitleLang: value));
+
+  Future<void> setRememberTracks(bool value) =>
+      updateSettings(_settings.copyWith(rememberTracks: value));
+
+  Future<void> setZapBanner(bool value) =>
+      updateSettings(_settings.copyWith(zapBanner: value));
+
+  /// The audio (or subtitle) choice last made on [channel], as a track key.
+  String? rememberedTrack(Channel channel, {required bool audio}) =>
+      _tracks['${channel.id}.${audio ? 'a' : 's'}'];
+
+  void rememberTrack(
+    Channel channel, {
+    required bool audio,
+    required String key,
+  }) {
+    final name = '${channel.id}.${audio ? 'a' : 's'}';
+    if (_tracks[name] == key) {
+      return;
+    }
+    _tracks[name] = key;
+    if (_tracks.length > 800) {
+      _tracks.remove(_tracks.keys.first);
+    }
+    unawaited(_storage.saveTracks(channel.sourceId, _tracks));
   }
 
   void _indexChannels(List<Channel> channels) {
@@ -262,7 +296,9 @@ class AppState extends ChangeNotifier {
       }
       final haystack = normalizeForSearch(
         '${programme.title} ${programme.subTitle ?? ''} '
-        '${programme.categories.join(' ')}',
+        '${programme.episode ?? ''} ${programme.categories.join(' ')} '
+        '${programme.keywords.join(' ')} '
+        '${programme.credits.map((c) => c.name).join(' ')}',
       );
       if (haystack.contains(needle)) {
         hits.add(ProgrammeHit(channel: channel, programme: programme));

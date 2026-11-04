@@ -66,6 +66,29 @@ jobs:
       - name: Create platform shells
         run: tool/bootstrap.sh
 
+      - name: Prepare release signing
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::error::ANDROID_KEYSTORE_B64 is not set; refusing to publish a debug-signed release."
+              exit 1
+            fi
+            echo "::warning::No signing secrets; this APK is signed with the debug key."
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > android/mawjac.jks
+          {
+            echo "storeFile=mawjac.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/key.properties
+
       - name: Build release APK
         run: flutter build apk --release --target-platform android-arm64
 

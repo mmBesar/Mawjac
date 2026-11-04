@@ -100,6 +100,22 @@ class AppStrings {
   String get noSourcesBody => isArabic
       ? 'أضف أول مصدر M3U وXMLTV للبدء. يمكنك حفظ عدة مصادر والتبديل بينها.'
       : 'Add your first M3U and XMLTV source to get started. You can keep several sources and switch between them.';
+  String lengthMinutes(int minutes) =>
+      isArabic ? '$minutes د' : '$minutes min';
+  String get repeatShowing => isArabic ? 'إعادة' : 'Repeat';
+  String creditRole(String role) => switch (role) {
+        'director' => isArabic ? 'الإخراج' : 'Directed by',
+        'writer' => isArabic ? 'الكتابة' : 'Written by',
+        'presenter' => isArabic ? 'تقديم' : 'Presented by',
+        'producer' => isArabic ? 'الإنتاج' : 'Produced by',
+        'guest' => isArabic ? 'ضيوف' : 'Guests',
+        _ => isArabic ? 'التمثيل' : 'Cast',
+      };
+  String get sourceType => isArabic ? 'نوع المصدر' : 'Source type';
+  String get sourceTypeGeneric => isArabic ? 'M3U + XMLTV' : 'M3U + XMLTV';
+  String get serviceUrl => isArabic ? 'عنوان الخدمة' : 'Service address';
+  String get serviceUrlRequired =>
+      isArabic ? 'أدخل عنوان الخدمة.' : 'Enter the service address.';
   String get sourceName => isArabic ? 'اسم المصدر' : 'Source name';
   String get sourceNameHint =>
       isArabic ? 'مثال: تونار المنزل' : 'For example: Home Tunarr';
@@ -464,14 +480,16 @@ class AppStrings {
       isArabic ? '$hours ساعة' : '$hours hours';
   String get playerSection => isArabic ? 'المشغّل' : 'Player';
   String get useMpvWindow =>
-      isArabic ? 'مشغّل mpv في نافذة مستقلة' : 'Play in a separate mpv window';
+      isArabic ? 'استخدم mpv النظام بدل المشغّل المدمج' : 'Use system mpv instead of the built-in player';
   String get useMpvWindowBody => isArabic
-      ? 'أفضل أداء على لينكس: فك ترميز بالعتاد وملء شاشة حقيقي. عند الإيقاف يعمل المشغّل المدمج.'
-      : 'Best on Linux: hardware decoding and real compositor fullscreen. Off uses the built-in renderer.';
+      ? 'اختياري: يفتح القناة في نافذة mpv منفصلة بإعداداتك. عند الإيقاف يعمل المشغّل المدمج داخل النافذة بالـGPU.'
+      : 'Optional: opens the channel in a separate mpv window with your own config. Off plays inside the app window on the GPU.';
   String get hardwareDecoding =>
       isArabic ? 'فك الترميز بالعتاد' : 'Hardware decoding';
   String get hwdecAutoSafe =>
       isArabic ? 'تلقائي (آمن)' : 'Automatic (safe)';
+  String get hwdecFromConfig =>
+      isArabic ? 'حسب إعدادات mpv' : 'From my mpv config';
   String get hwdecAuto => isArabic ? 'تلقائي' : 'Automatic';
   String get hwdecOff => isArabic ? 'برمجي فقط' : 'Software only';
   String get hwdecAutoCopy =>
@@ -481,8 +499,8 @@ class AppStrings {
   String get useMpvConfig =>
       isArabic ? 'استخدم إعدادات mpv الخاصة بي' : 'Use my own mpv config';
   String get useMpvConfigBody => isArabic
-      ? 'يحمّل ‎~/.config/mpv‎ بما فيها السكربتات مثل uosc.'
-      : 'Loads ~/.config/mpv, including scripts such as uosc.';
+      ? 'يعمل mpv بإعداداتك الافتراضية (‎~/.config/mpv‎ والسكربتات مثل uosc) دون أي إعداد خاص.'
+      : 'Runs mpv with your default config (~/.config/mpv and scripts such as uosc), with no special setup.';
   String get startFullscreen =>
       isArabic ? 'ابدأ بملء الشاشة' : 'Start fullscreen';
   String mpvFound(String version, bool bundled) => isArabic

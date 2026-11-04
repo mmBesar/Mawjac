@@ -87,6 +87,82 @@ def patch_android_manifest() -> None:
     print("  patched AndroidManifest.xml")
 
 
+KTS_HEAD = """import java.io.FileInputStream
+import java.util.Properties
+
+"""
+
+KTS_PROPS = """val mawjacKeyProps = Properties()
+val mawjacKeyFile = rootProject.file("key.properties")
+if (mawjacKeyFile.exists()) {
+    FileInputStream(mawjacKeyFile).use { mawjacKeyProps.load(it) }
+}
+
+"""
+
+KTS_SIGNING = """    signingConfigs {
+        create("release") {
+            if (mawjacKeyFile.exists()) {
+                keyAlias = mawjacKeyProps["keyAlias"] as String
+                keyPassword = mawjacKeyProps["keyPassword"] as String
+                storeFile = rootProject.file(mawjacKeyProps["storeFile"] as String)
+                storePassword = mawjacKeyProps["storePassword"] as String
+            }
+        }
+    }
+
+"""
+
+GROOVY_PROPS = """def mawjacKeyProps = new Properties()
+def mawjacKeyFile = rootProject.file("key.properties")
+if (mawjacKeyFile.exists()) {
+    mawjacKeyFile.withInputStream { mawjacKeyProps.load(it) }
+}
+
+"""
+
+GROOVY_SIGNING = """    signingConfigs {
+        release {
+            if (mawjacKeyFile.exists()) {
+                keyAlias mawjacKeyProps['keyAlias']
+                keyPassword mawjacKeyProps['keyPassword']
+                storeFile rootProject.file(mawjacKeyProps['storeFile'])
+                storePassword mawjacKeyProps['storePassword']
+            }
+        }
+    }
+
+"""
+
+
+def sign_kts(text: str) -> str:
+    """Release builds use android/key.properties when present, else debug."""
+    if "mawjacKeyProps" in text:
+        return text
+    text = KTS_HEAD + text
+    text = re.sub(r"^android\s*\{", lambda m: KTS_PROPS + "android {", text, count=1, flags=re.M)
+    text = re.sub(r"^(\s*)buildTypes\s*\{", lambda m: KTS_SIGNING + m.group(0), text, count=1, flags=re.M)
+    text = re.sub(
+        r'signingConfig\s*=\s*signingConfigs\.getByName\("debug"\)',
+        'signingConfig = if (mawjacKeyFile.exists()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")',
+        text,
+    )
+    return text
+
+
+def sign_groovy(text: str) -> str:
+    if "mawjacKeyProps" in text:
+        return text
+    text = re.sub(r"^android\s*\{", lambda m: GROOVY_PROPS + "android {", text, count=1, flags=re.M)
+    text = re.sub(r"^(\s*)buildTypes\s*\{", lambda m: GROOVY_SIGNING + m.group(0), text, count=1, flags=re.M)
+    text = re.sub(
+        r"signingConfig\s+signingConfigs\.debug",
+        "signingConfig mawjacKeyFile.exists() ? signingConfigs.release : signingConfigs.debug",
+        text,
+    )
+    return text
+
+
 def patch_android_gradle() -> None:
     kts = ANDROID / "app" / "build.gradle.kts"
     groovy = ANDROID / "app" / "build.gradle"
@@ -102,6 +178,7 @@ def patch_android_gradle() -> None:
             "minSdk = 24",
             text,
         )
+        text = sign_kts(text)
         write(kts, text)
         print("  patched android/app/build.gradle.kts")
     elif groovy.exists():
@@ -116,6 +193,7 @@ def patch_android_gradle() -> None:
             "minSdkVersion 24",
             text,
         )
+        text = sign_groovy(text)
         write(groovy, text)
         print("  patched android/app/build.gradle")
 

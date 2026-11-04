@@ -289,23 +289,30 @@ class MpvRuntime {
     required bool useUserConfig,
     required bool fullscreen,
   }) {
-    final chosenHwdec =
-        capabilities.hwdecs.isEmpty || capabilities.hwdecs.contains(hwdec)
+    // 'config' means: leave decoding to mpv and the user's own config.
+    final chosenHwdec = hwdec == 'config'
+        ? null
+        : (capabilities.hwdecs.isEmpty || capabilities.hwdecs.contains(hwdec)
             ? hwdec
-            : 'auto-safe';
+            : 'auto-safe');
     return <String>[
       if (!useUserConfig) '--no-config',
       '--force-window=yes',
       '--title=$title',
       '--user-agent=$kMawjUserAgent',
-      '--hwdec=$chosenHwdec',
+      if (chosenHwdec != null)
+        '--hwdec=$chosenHwdec'
+      else if (!useUserConfig)
+        '--hwdec=auto-safe',
       if (videoOutput != 'auto') '--vo=$videoOutput',
       // ErsatzTV segments use unusual extensions; ffmpeg refuses them unless
       // told otherwise. mpv itself does not set `strict=experimental`.
       '--demuxer-lavf-o=allowed_extensions=ALL,seg_max_retry=5',
-      '--cache=yes',
-      '--cache-secs=30',
-      '--demuxer-max-bytes=64MiB',
+      if (!useUserConfig) ...const <String>[
+        '--cache=yes',
+        '--cache-secs=30',
+        '--demuxer-max-bytes=64MiB',
+      ],
       '--network-timeout=60',
       '--tls-verify=${allowInsecure ? 'no' : 'yes'}',
       '--ytdl=no',

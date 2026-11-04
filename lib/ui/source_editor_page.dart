@@ -24,6 +24,8 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
   late EndpointKind _m3uKind;
   late EndpointKind _epgKind;
   late bool _allowInsecure;
+  late final TextEditingController _base;
+  late SourceType _type;
 
   bool _saving = false;
   bool _testing = false;
@@ -41,6 +43,8 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
     _m3uKind = source?.m3u.kind ?? EndpointKind.url;
     _epgKind = source?.epg.kind ?? EndpointKind.url;
     _allowInsecure = source?.allowInsecureCerts ?? false;
+    _type = source?.type ?? SourceType.generic;
+    _base = TextEditingController(text: source?.baseUrl ?? '');
   }
 
   @override
@@ -48,6 +52,7 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
     _name.dispose();
     _m3u.dispose();
     _epg.dispose();
+    _base.dispose();
     super.dispose();
   }
 
@@ -55,6 +60,15 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
 
   SourceConfig _draft() {
     final trimmedName = _name.text.trim();
+    if (_type != SourceType.generic) {
+      return SourceConfig.service(
+        id: widget.source?.id ?? generateSourceId(),
+        name: trimmedName.isEmpty ? 'Source' : trimmedName,
+        type: _type,
+        baseUrl: _base.text,
+        allowInsecureCerts: _allowInsecure,
+      );
+    }
     return SourceConfig(
       id: widget.source?.id ?? generateSourceId(),
       name: trimmedName.isEmpty ? 'Source' : trimmedName,
@@ -69,6 +83,15 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
     String? error;
     if (_name.text.trim().isEmpty) {
       error = strings.sourceNameRequired;
+    } else if (_type != SourceType.generic) {
+      if (_base.text.trim().isEmpty) {
+        error = strings.serviceUrlRequired;
+      } else if (!_validEndpoint(
+        SourceType.normalizeBase(_base.text),
+        EndpointKind.url,
+      )) {
+        error = strings.invalidLocation;
+      }
     } else if (_m3u.text.trim().isEmpty) {
       error = strings.playlistRequired;
     } else if (!_validEndpoint(_m3u.text.trim(), _m3uKind)) {
@@ -245,6 +268,67 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
                   ),
                 ),
                 const SizedBox(height: 22),
+                Text(
+                  strings.sourceType,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                SegmentedButton<SourceType>(
+                  showSelectedIcon: false,
+                  segments: <ButtonSegment<SourceType>>[
+                    ButtonSegment<SourceType>(
+                      value: SourceType.generic,
+                      label: Text(strings.sourceTypeGeneric),
+                    ),
+                    const ButtonSegment<SourceType>(
+                      value: SourceType.tunarr,
+                      label: Text('Tunarr'),
+                    ),
+                    const ButtonSegment<SourceType>(
+                      value: SourceType.ersatztv,
+                      label: Text('ErsatzTV'),
+                    ),
+                  ],
+                  selected: <SourceType>{_type},
+                  onSelectionChanged: (value) =>
+                      setState(() => _type = value.first),
+                ),
+                const SizedBox(height: 22),
+                if (_type != SourceType.generic) ...<Widget>[
+                  Text(
+                    strings.serviceUrl,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _base,
+                    keyboardType: TextInputType.url,
+                    textDirection: TextDirection.ltr,
+                    textAlign: TextAlign.start,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: _type == SourceType.tunarr
+                          ? 'http://192.168.1.10:8000'
+                          : 'http://192.168.1.10:8409',
+                      prefixIcon: const Icon(Icons.dns_rounded),
+                    ),
+                  ),
+                  if (_base.text.trim().isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 10),
+                    SelectableText(
+                      '${_type.playlistUrl(_base.text)}\n${_type.guideUrl(_base.text)}',
+                      textDirection: TextDirection.ltr,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colors.subtext0,
+                            height: 1.5,
+                          ),
+                    ),
+                  ],
+                ] else ...<Widget>[
                 _EndpointField(
                   label: strings.playlistM3u,
                   hint: 'https://example.com/channels.m3u',
@@ -272,6 +356,7 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
                   fileLabel: strings.file,
                   urlLabel: strings.url,
                 ),
+                ],
                 const SizedBox(height: 10),
                 SwitchListTile(
                   value: _allowInsecure,

@@ -184,12 +184,24 @@ To cut a release:
 
 ### Signing the Android APK
 
-The checked-in Gradle configuration is Flutter's template, so release APKs are
-signed with the debug keystore. That is intentional for sideloadable builds but
-is **not** Play Store ready. To sign with your own key, add a `key.properties`
-and signing config to the generated `android/app/build.gradle(.kts)` after
-running `tool/bootstrap.sh`, and provide the keystore as a CI secret. Never
-commit the keystore or its passwords.
+`tool/configure_platforms.py` patches the generated Gradle file so release
+builds are signed with `android/key.properties` when it exists, and with the
+debug key otherwise (local builds). In CI the file is written from four
+repository secrets (Settings -> Secrets and variables -> Actions):
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_B64` | `base64 -w0 mawjac.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | the keystore password |
+| `ANDROID_KEY_ALIAS` | the alias (`mawjac`) |
+| `ANDROID_KEY_PASSWORD` | the key password |
+
+A tag build (`v*`) fails if `ANDROID_KEYSTORE_B64` is missing, so a debug-signed
+APK is never published by accident. Keystores, `key.properties` and similar
+files are in `.gitignore`. Back the keystore up: losing it means users can
+never update the app in place. An APK signed with the debug key cannot be
+updated by one signed with the release key (Android reports a signature
+mismatch); uninstall once, then install the signed build.
 
 ### Dependency lockfile
 

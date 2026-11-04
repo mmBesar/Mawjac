@@ -274,7 +274,7 @@ class PlaylistLoader {
         return null;
       }
       final map = decoded.cast<String, dynamic>();
-      if (map['version'] != 2 || map['signature'] != _signature(source)) {
+      if (map['version'] != 3 || map['signature'] != _signature(source)) {
         return null;
       }
       final savedAt = DateTime.tryParse(map['savedAt'] as String? ?? '');
@@ -296,7 +296,7 @@ class PlaylistLoader {
     }
     try {
       final map = <String, dynamic>{
-        'version': 2,
+        'version': 3,
         'signature': _signature(source),
         'savedAt': content.loadedAt.toIso8601String(),
         'xmltvLocation': content.xmltvLocation,
@@ -364,6 +364,15 @@ class PlaylistLoader {
       'categories': programme.categories,
       'iconUrl': programme.iconUrl,
       'episode': programme.episode,
+      'credits': programme.credits
+          .map((credit) => credit.toJson())
+          .toList(growable: false),
+      'date': programme.date,
+      'keywords': programme.keywords,
+      'length': programme.lengthSeconds,
+      'rating': programme.rating,
+      'poster': programme.posterUrl,
+      'rerun': programme.previouslyShown,
     };
   }
 
@@ -387,6 +396,20 @@ class PlaylistLoader {
           const <String>[],
       iconUrl: map['iconUrl'] as String?,
       episode: map['episode'] as String?,
+      credits: (map['credits'] as List?)
+              ?.map(ProgrammeCredit.fromJson)
+              .whereType<ProgrammeCredit>()
+              .toList(growable: false) ??
+          const <ProgrammeCredit>[],
+      date: map['date'] as String?,
+      keywords: (map['keywords'] as List?)
+              ?.whereType<String>()
+              .toList(growable: false) ??
+          const <String>[],
+      lengthSeconds: map['length'] as int?,
+      rating: map['rating'] as String?,
+      posterUrl: map['poster'] as String?,
+      previouslyShown: map['rerun'] as bool? ?? false,
     );
   }
 }

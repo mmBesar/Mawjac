@@ -256,10 +256,10 @@ class _ProgrammeCard extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      if (programme.subTitle != null) ...<Widget>[
+                      if (programme.subtitleLine != null) ...<Widget>[
                         const SizedBox(height: 2),
                         BidiText(
-                          programme.subTitle!,
+                          programme.subtitleLine!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(

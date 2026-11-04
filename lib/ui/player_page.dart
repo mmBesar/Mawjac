@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -12,15 +13,19 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/app_info.dart';
 import '../core/bidi.dart';
-import '../core/network_image.dart';
 import '../core/platform.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
 import '../data/models.dart';
 import '../data/mpv_runtime.dart';
+import '../data/track_prefs.dart';
+import '../l10n/player_strings.dart';
 import '../l10n/strings.dart';
 import 'desktop_player_page.dart';
 import 'widgets/channel_logo.dart';
+import 'widgets/stb_browser.dart';
+import 'widgets/stb_osd.dart';
+import 'widgets/track_sheet.dart';
 import 'widgets/wave.dart';
 
 /// Opens the player for [channel] with a short fade.
@@ -85,13 +90,7 @@ class _PlayerPageState extends State<PlayerPage> {
   ].join(',');
 
   /// How long to wait for the first video frame before saying so.
-  static const Duration _stallAfter = Duration(seconds: 30);
-
-  /// A channel that is still starting on the server often fails the first
-  /// open and works a moment later. Failures before any video are retried this
-  /// many times, a few seconds apart, before an error is shown.
-  static const int _maxAutoRetries = 3;
-  static const Duration _retryDelay = Duration(seconds: 4);
+  static const Duration _stallAfter = Duration(seconds: 25);
 
   /// Controls fade out after this long while a stream is playing.
   static const Duration _controlsTimeout = Duration(seconds: 4);
@@ -112,6 +111,20 @@ class _PlayerPageState extends State<PlayerPage> {
 
   /// `MAWJAC_HWDEC=auto-copy-safe` lets Linux try GPU decoding while keeping
   /// the software renderer. The default is the safe CPU decoder.
+  /// Linux in-app rendering: the GPU path is smooth; the CPU path is the
+  /// safe fallback (an old Wayland/Mesa combination froze on GPU).
+  static bool _gpuRenderer(String choice) {
+    if (!Platform.isLinux) {
+      return true;
+    }
+    // MAWJAC_RENDERER=cpu is a way back if the window ever freezes.
+    final forced = (Platform.environment['MAWJAC_RENDERER'] ?? '').trim();
+    final pick = forced.isNotEmpty ? forced : choice;
+    return pick != 'cpu';
+  }
+
+  late final bool _gpu;
+
   static String _linuxHwdec() {
     try {
       final value = (Platform.environment['MAWJAC_HWDEC'] ?? '').trim();
@@ -133,13 +146,12 @@ class _PlayerPageState extends State<PlayerPage> {
   StreamSubscription<VideoParams>? _videoParamsSubscription;
   StreamSubscription<bool>? _bufferingSubscription;
   StreamSubscription<double>? _volumeSubscription;
-  StreamSubscription<Duration>? _positionSubscription;
-  Timer? _retryTimer;
-  int _autoRetries = 0;
   StreamSubscription<PlayerLog>? _logSubscription;
   Timer? _stallTimer;
   Timer? _hideTimer;
   Timer? _osdTimer;
+  Timer? _errorTimer;
+  int _autoRetries = 0;
 
   (int, int)? _softwareVideoSize;
   VideoParams? _videoParams;
@@ -158,12 +170,36 @@ class _PlayerPageState extends State<PlayerPage> {
   double _volume = 100;
   bool _adjustingBrightness = true;
   _OsdKind? _osdKind;
+  IconData? _osdIcon;
+  String? _osdTitle;
+  String? _osdSubtitle;
+  bool _browserOpen = false;
+  String? _browserGroup;
+  bool _helpOpen = false;
+  int _aspectMode = 0;
+  bool _deinterlace = false;
+  double _audioDelay = 0;
+  String _digits = '';
+  Timer? _digitTimer;
+  String? _lastAudioId;
+  String? _lastSubtitleId;
+  bool _audioApplied = false;
+  bool _subApplied = false;
+  DateTime _ignoreTracksUntil = DateTime.fromMillisecondsSinceEpoch(0);
+  StreamSubscription<Tracks>? _tracksSubscription;
+  StreamSubscription<Track>? _trackSubscription;
+  late AppState _appState;
+  bool _infoVisible = false;
+  Timer? _infoTimer;
+  Map<String, String> _infoProps = const <String, String>{};
   double _osdValue = 0;
 
   @override
   void initState() {
     super.initState();
     _channel = widget.channel;
+    _appState = context.read<AppState>();
+    _gpu = _gpuRenderer(_appState.settings.inAppRenderer);
     _player = Player(
       configuration: PlayerConfiguration(
         title: 'Mawjac — ${_channel.name}',
@@ -177,43 +213,36 @@ class _PlayerPageState extends State<PlayerPage> {
         // media_kit 2.0.1 renders Linux video through an isolated EGL context
         // that can stall on Wayland/Mesa and take the UI with it, so Linux
         // uses the CPU upload path. Android keeps the hardware path.
-        enableHardwareAcceleration: !Platform.isLinux,
-        width: Platform.isLinux ? _softwareStartWidth : null,
-        height: Platform.isLinux ? _softwareStartHeight : null,
+        enableHardwareAcceleration: _gpu,
+        width: Platform.isLinux && !_gpu ? _softwareStartWidth : null,
+        height: Platform.isLinux && !_gpu ? _softwareStartHeight : null,
       ),
     );
     _volume = _player.state.volume;
 
     _errorSubscription = _player.stream.error.listen((message) {
       if (!mounted || message.trim().isEmpty || _hasVideo) {
+        // A late complaint while the picture is already moving is noise.
         return;
       }
-      if (_autoRetries < _maxAutoRetries) {
+      final text = message.trim();
+      _errorTimer?.cancel();
+      if (_autoRetries < 3) {
+        // A server may need a few seconds to start a channel; the first try
+        // often fails while the next works. Retry quietly before saying so.
         _autoRetries++;
-        _retryTimer?.cancel();
-        _retryTimer = Timer(_retryDelay, () {
+        _errorTimer = Timer(const Duration(seconds: 4), () {
           if (mounted && !_hasVideo) {
-            unawaited(_open(automatic: true));
+            unawaited(_open(auto: true));
           }
         });
         return;
       }
-      setState(() => _error = message.trim());
-    });
-    _positionSubscription = _player.stream.position.listen((position) {
-      // Real playback clears any error or "still waiting" message at once.
-      if (!mounted || position <= Duration.zero) {
-        return;
-      }
-      if (_error != null || _stalled || !_hasVideo) {
-        _stallTimer?.cancel();
-        _retryTimer?.cancel();
-        setState(() {
-          _error = null;
-          _stalled = false;
-          _hasVideo = true;
-        });
-      }
+      _errorTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted && !_hasVideo) {
+          setState(() => _error = text);
+        }
+      });
     });
     _playingSubscription = _player.stream.playing.listen((playing) {
       if (!mounted) {
@@ -237,6 +266,8 @@ class _PlayerPageState extends State<PlayerPage> {
         setState(() => _buffering = buffering);
       }
     });
+    _tracksSubscription = _player.stream.tracks.listen(_applyTracks);
+    _trackSubscription = _player.stream.track.listen(_onTrackChanged);
     _volumeSubscription = _player.stream.volume.listen((volume) {
       _volume = volume;
     });
@@ -245,7 +276,7 @@ class _PlayerPageState extends State<PlayerPage> {
       final hasSize = (params.w ?? 0) > 0 && (params.h ?? 0) > 0;
       if (hasSize && mounted && !_hasVideo) {
         _stallTimer?.cancel();
-        _retryTimer?.cancel();
+        _errorTimer?.cancel();
         setState(() {
           _hasVideo = true;
           _stalled = false;
@@ -291,13 +322,13 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
-  Future<void> _open({bool automatic = false}) async {
-    if (!automatic) {
-      _autoRetries = 0;
-    }
-    _retryTimer?.cancel();
+  Future<void> _open({bool auto = false}) async {
     final state = context.read<AppState>();
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
+    if (!auto) {
+      _autoRetries = 0;
+    }
+    _errorTimer?.cancel();
     _stallTimer?.cancel();
     setState(() {
       _error = null;
@@ -311,13 +342,20 @@ class _PlayerPageState extends State<PlayerPage> {
       }
     });
     unawaited(state.markWatched(_channel));
+    _audioApplied = false;
+    _subApplied = false;
+    _lastAudioId = null;
+    _lastSubtitleId = null;
+    if (!auto) {
+      _flashBanner();
+    }
 
     try {
       await _setMpvProperty(
         'hwdec',
-        Platform.isLinux ? _linuxHwdec() : 'auto-safe',
+        Platform.isLinux && !_gpu ? _linuxHwdec() : 'auto-safe',
       );
-      if (Platform.isLinux) {
+      if (Platform.isLinux && !_gpu) {
         // Everything after decoding runs on the CPU: decode on all cores and
         // use the cheapest colour conversion and scaler.
         await _setMpvProperty('vd-lavc-threads', '0');
@@ -327,7 +365,7 @@ class _PlayerPageState extends State<PlayerPage> {
         await _setMpvProperty('framedrop', 'vo');
       }
       await _setMpvProperty('keep-open', 'yes');
-      await _setMpvProperty('network-timeout', '60');
+      await _setMpvProperty('network-timeout', '90');
       await _setMpvProperty('tls-verify', allowInsecure ? 'no' : 'yes');
       await _setMpvProperty('demuxer-lavf-o', _demuxerLavfOptions);
       await _player.open(
@@ -400,6 +438,10 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _toggleControls() {
+    if (_browserOpen) {
+      _closeBrowser();
+      return;
+    }
     if (_controlsVisible) {
       _hideTimer?.cancel();
       setState(() => _controlsVisible = false);
@@ -564,6 +606,21 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
+  void _showMessage(IconData icon, String title, [String? subtitle]) {
+    _osdTimer?.cancel();
+    setState(() {
+      _osdKind = _OsdKind.message;
+      _osdIcon = icon;
+      _osdTitle = title;
+      _osdSubtitle = subtitle;
+    });
+    _osdTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (mounted) {
+        setState(() => _osdKind = null);
+      }
+    });
+  }
+
   void _showOsd(_OsdKind kind, double value) {
     _osdTimer?.cancel();
     setState(() {
@@ -577,8 +634,397 @@ class _PlayerPageState extends State<PlayerPage> {
     });
   }
 
+  void _adjustVolume(double delta) {
+    final next = (_volume + delta).clamp(0.0, 100.0).toDouble();
+    setState(() => _volume = next);
+    unawaited(_player.setVolume(next));
+    _showOsd(_OsdKind.volume, next / 100);
+  }
+
+  void _onScroll(PointerSignalEvent event) {
+    if (!_browserOpen &&
+        !_helpOpen &&
+        event is PointerScrollEvent &&
+        event.scrollDelta.dy != 0) {
+      _adjustVolume(event.scrollDelta.dy < 0 ? 5 : -5);
+    }
+  }
+
+  // ---- Channel browser, shortcuts and picture options -----------------------
+
+  void _openBrowser() {
+    if (_browserOpen) {
+      return;
+    }
+    _hideTimer?.cancel();
+    setState(() {
+      _browserOpen = true;
+      _helpOpen = false;
+    });
+  }
+
+  void _closeBrowser() {
+    if (!_browserOpen) {
+      return;
+    }
+    setState(() => _browserOpen = false);
+    _focusNode.requestFocus();
+    _scheduleHide();
+  }
+
+  void _tuneFromBrowser(Channel channel) {
+    _closeBrowser();
+    _switchTo(channel);
+  }
+
+  void _toggleHelp() {
+    setState(() {
+      _helpOpen = !_helpOpen;
+      _browserOpen = false;
+    });
+    if (!_helpOpen) {
+      _focusNode.requestFocus();
+    }
+  }
+
+  static const List<double?> _aspectRatios = <double?>[
+    null,
+    16 / 9,
+    4 / 3,
+    21 / 9,
+    null,
+  ];
+
+  void _cycleAspect() {
+    final next = (_aspectMode + 1) % _aspectRatios.length;
+    setState(() => _aspectMode = next);
+    final strings = context.strings;
+    _showMessage(
+      Icons.aspect_ratio_rounded,
+      strings.aspectLabel,
+      strings.aspectName(next),
+    );
+  }
+
+  void _toggleDeinterlace() {
+    final next = !_deinterlace;
+    setState(() => _deinterlace = next);
+    unawaited(_setMpvProperty('deinterlace', next ? 'yes' : 'no'));
+    final strings = context.strings;
+    _showMessage(
+      Icons.blur_linear_rounded,
+      strings.deinterlaceLabel,
+      next ? strings.onWord : strings.offWord,
+    );
+  }
+
+  void _nudgeAudioDelay(double seconds) {
+    final next = ((_audioDelay + seconds) * 1000).round() / 1000;
+    _audioDelay = next;
+    unawaited(_setMpvProperty('audio-delay', next.toString()));
+    final ms = (next * 1000).round();
+    _showMessage(
+      Icons.sync_rounded,
+      context.strings.audioDelayLabel,
+      '${ms > 0 ? '+' : ''}$ms ms',
+    );
+  }
+
+  void _cycleAudio() {
+    final strings = context.strings;
+    final audio =
+        _player.state.tracks.audio.where((t) => _realTrack(t.id)).toList();
+    if (audio.length < 2) {
+      _showMessage(
+        Icons.audiotrack_rounded,
+        strings.audioLabel,
+        strings.noOtherTracks,
+      );
+      return;
+    }
+    _lastAudioId ??= _player.state.track.audio.id;
+    final current =
+        audio.indexWhere((t) => t.id == _player.state.track.audio.id);
+    unawaited(_player.setAudioTrack(audio[(current + 1) % audio.length]));
+  }
+
+  void _cycleSubtitle() {
+    final strings = context.strings;
+    final subtitles =
+        _player.state.tracks.subtitle.where((t) => _realTrack(t.id)).toList();
+    if (subtitles.isEmpty) {
+      _showMessage(
+        Icons.subtitles_off_rounded,
+        strings.subtitleLabel,
+        strings.noOtherTracks,
+      );
+      return;
+    }
+    _subApplied = true;
+    _lastSubtitleId ??= _player.state.track.subtitle.id;
+    final currentId = _player.state.track.subtitle.id;
+    final index = subtitles.indexWhere((t) => t.id == currentId);
+    if (currentId == 'no' || currentId == 'auto' || index < 0) {
+      unawaited(_player.setSubtitleTrack(subtitles.first));
+    } else if (index + 1 < subtitles.length) {
+      unawaited(_player.setSubtitleTrack(subtitles[index + 1]));
+    } else {
+      unawaited(_player.setSubtitleTrack(SubtitleTrack.no()));
+    }
+  }
+
+  /// Number keys build a channel number; it tunes after a short pause, or at
+  /// once on Enter.
+  void _digit(int value) {
+    if (_digits.length >= 4) {
+      return;
+    }
+    _digits += '$value';
+    _showMessage(Icons.dialpad_rounded, '${context.strings.channelWord} $_digits');
+    _digitTimer?.cancel();
+    _digitTimer = Timer(const Duration(milliseconds: 1700), _commitDigits);
+  }
+
+  void _commitDigits() {
+    _digitTimer?.cancel();
+    final number = _digits;
+    _digits = '';
+    if (number.isEmpty || !mounted) {
+      return;
+    }
+    final target = _appState.channels
+        .where((channel) => channel.number == number)
+        .toList();
+    if (target.isEmpty) {
+      _showMessage(
+        Icons.dialpad_rounded,
+        context.strings.noChannelNumber(number),
+      );
+      return;
+    }
+    _switchTo(target.first);
+  }
+
+  // ---- Default and remembered tracks -------------------------------------
+
+  static bool _realTrack(String id) => id != 'auto' && id != 'no';
+
+  /// Picks the audio and subtitle tracks once the stream's tracks are known:
+  /// what was chosen last time on this channel, else the preferred language.
+  void _applyTracks(Tracks tracks) {
+    if (!mounted) {
+      return;
+    }
+    final settings = _appState.settings;
+    final remember = settings.rememberTracks;
+    if (!_audioApplied) {
+      final audio = tracks.audio.where((t) => _realTrack(t.id)).toList();
+      if (audio.isNotEmpty) {
+        _audioApplied = true;
+        final index = pickTrack(
+          <({String? language, String? title})>[
+            for (final t in audio) (language: t.language, title: t.title),
+          ],
+          remembered:
+              remember ? _appState.rememberedTrack(_channel, audio: true) : null,
+          preferred: settings.preferredAudioLang,
+        );
+        if (index != null) {
+          _lastAudioId = audio[index].id;
+          if (audio[index].id != _player.state.track.audio.id) {
+            _ignoreTracksUntil = DateTime.now().add(const Duration(seconds: 2));
+            unawaited(_player.setAudioTrack(audio[index]));
+          }
+        }
+      }
+    }
+    if (!_subApplied) {
+      final rememberedSub =
+          remember ? _appState.rememberedTrack(_channel, audio: false) : null;
+      final off = rememberedSub == 'off' ||
+          (rememberedSub == null && settings.preferredSubtitleLang == 'off');
+      if (off) {
+        _subApplied = true;
+        _lastSubtitleId = 'no';
+        if (_player.state.track.subtitle.id != 'no') {
+          _ignoreTracksUntil = DateTime.now().add(const Duration(seconds: 2));
+          unawaited(_player.setSubtitleTrack(SubtitleTrack.no()));
+        }
+      } else {
+        final subs = tracks.subtitle.where((t) => _realTrack(t.id)).toList();
+        if (subs.isNotEmpty) {
+          final index = pickTrack(
+            <({String? language, String? title})>[
+              for (final t in subs) (language: t.language, title: t.title),
+            ],
+            remembered: rememberedSub,
+            preferred: settings.preferredSubtitleLang,
+          );
+          if (index != null) {
+            _subApplied = true;
+            _lastSubtitleId = subs[index].id;
+            _ignoreTracksUntil = DateTime.now().add(const Duration(seconds: 2));
+            unawaited(_player.setSubtitleTrack(subs[index]));
+          }
+        }
+      }
+    }
+  }
+
+  /// A change after the automatic pick is the user's: remember it, show it.
+  void _onTrackChanged(Track track) {
+    if (!mounted ||
+        !_audioApplied ||
+        DateTime.now().isBefore(_ignoreTracksUntil)) {
+      return;
+    }
+    final strings = context.strings;
+    final tracks = _player.state.tracks;
+    final remember = _appState.settings.rememberTracks;
+    final audio = track.audio;
+    if (_realTrack(audio.id) && audio.id != _lastAudioId) {
+      final first = _lastAudioId == null;
+      _lastAudioId = audio.id;
+      if (!first) {
+        if (remember) {
+          _appState.rememberTrack(
+            _channel,
+            audio: true,
+            key: trackKey(audio.language, audio.title),
+          );
+        }
+        final index = tracks.audio.where((t) => _realTrack(t.id)).toList().indexWhere((t) => t.id == audio.id);
+        _showMessage(
+          Icons.audiotrack_rounded,
+          strings.audioLabel,
+          trackLabel(
+            context,
+            index: index < 0 ? 0 : index,
+            language: audio.language,
+            title: audio.title,
+            codec: audio.codec,
+          ),
+        );
+        return;
+      }
+    }
+    final subtitle = track.subtitle;
+    if (_subApplied && subtitle.id != _lastSubtitleId) {
+      final first = _lastSubtitleId == null;
+      _lastSubtitleId = subtitle.id;
+      if (first) {
+        return;
+      }
+      if (subtitle.id == 'no') {
+        if (remember) {
+          _appState.rememberTrack(_channel, audio: false, key: 'off');
+        }
+        _showMessage(Icons.subtitles_off_rounded, strings.subtitleLabel, strings.subtitlesOff);
+      } else if (_realTrack(subtitle.id)) {
+        if (remember) {
+          _appState.rememberTrack(
+            _channel,
+            audio: false,
+            key: trackKey(subtitle.language, subtitle.title),
+          );
+        }
+        final index = tracks.subtitle.where((t) => _realTrack(t.id)).toList().indexWhere((t) => t.id == subtitle.id);
+        _showMessage(
+          Icons.subtitles_rounded,
+          strings.subtitleLabel,
+          trackLabel(
+            context,
+            index: index < 0 ? 0 : index,
+            language: subtitle.language,
+            title: subtitle.title,
+            codec: subtitle.codec,
+          ),
+        );
+      }
+    }
+  }
+
+  // ---- Stream info (I) ----------------------------------------------------
+
+  bool _infoPinned = false;
+  Timer? _bannerTimer;
+
+  void _setInfo(bool visible) {
+    _infoTimer?.cancel();
+    _bannerTimer?.cancel();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _infoVisible = visible);
+    if (visible) {
+      unawaited(_refreshInfo());
+      _infoTimer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => unawaited(_refreshInfo()),
+      );
+    }
+  }
+
+  /// `I`: pin the banner, or hide it.
+  void _toggleInfo() {
+    if (_infoVisible) {
+      _infoPinned = false;
+      _setInfo(false);
+    } else {
+      _infoPinned = true;
+      _setInfo(true);
+    }
+  }
+
+  /// Show the banner for a few seconds when a channel opens.
+  void _flashBanner() {
+    if (!kIsDesktop || _infoPinned || !_appState.settings.zapBanner) {
+      return;
+    }
+    _setInfo(true);
+    _bannerTimer = Timer(const Duration(seconds: 7), () {
+      if (mounted && !_infoPinned) {
+        _setInfo(false);
+      }
+    });
+  }
+
+  Future<void> _refreshInfo() async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) {
+      return;
+    }
+    const names = <String>[
+      'video-codec',
+      'audio-codec-name',
+      'hwdec-current',
+      'estimated-vf-fps',
+      'video-bitrate',
+      'audio-bitrate',
+      'audio-params/samplerate',
+      'audio-params/hr-channels',
+      'frame-drop-count',
+    ];
+    final values = <String, String>{};
+    for (final name in names) {
+      try {
+        final value = await platform.getProperty(name);
+        if (value.isNotEmpty) {
+          values[name] = value;
+        }
+      } catch (_) {
+        // Not available in this libmpv build.
+      }
+    }
+    if (mounted && _infoVisible) {
+      setState(() => _infoProps = values);
+    }
+  }
+
   void _toggleMute() {
-    unawaited(_player.setVolume(_volume <= 0.01 ? 100 : 0));
+    final target = _volume <= 0.01 ? 100.0 : 0.0;
+    unawaited(_player.setVolume(target));
+    _showOsd(_OsdKind.volume, target / 100);
     _showControls();
   }
 
@@ -724,12 +1170,16 @@ class _PlayerPageState extends State<PlayerPage> {
     _stallTimer?.cancel();
     _hideTimer?.cancel();
     _osdTimer?.cancel();
-    _retryTimer?.cancel();
-    _positionSubscription?.cancel();
+    _errorTimer?.cancel();
+    _infoTimer?.cancel();
+    _bannerTimer?.cancel();
+    _digitTimer?.cancel();
     _errorSubscription?.cancel();
     _playingSubscription?.cancel();
     _bufferingSubscription?.cancel();
     _volumeSubscription?.cancel();
+    _tracksSubscription?.cancel();
+    _trackSubscription?.cancel();
     _videoParamsSubscription?.cancel();
     _logSubscription?.cancel();
     _focusNode.dispose();
@@ -773,7 +1223,9 @@ class _PlayerPageState extends State<PlayerPage> {
       child: CallbackShortcuts(
         bindings: <ShortcutActivator, VoidCallback>{
           const SingleActivator(LogicalKeyboardKey.escape): () {
-            if (_fullscreen) {
+            if (_helpOpen) {
+              _toggleHelp();
+            } else if (_fullscreen) {
               unawaited(_toggleFullscreen());
             } else {
               Navigator.of(context).maybePop();
@@ -793,9 +1245,70 @@ class _PlayerPageState extends State<PlayerPage> {
           const SingleActivator(LogicalKeyboardKey.pageUp): () => _zap(-1),
           const SingleActivator(LogicalKeyboardKey.arrowDown): () => _zap(1),
           const SingleActivator(LogicalKeyboardKey.pageDown): () => _zap(1),
-          const SingleActivator(LogicalKeyboardKey.keyI): () {
+          const SingleActivator(LogicalKeyboardKey.keyI): _toggleInfo,
+          const SingleActivator(LogicalKeyboardKey.keyD): () {
             unawaited(_showDiagnostics());
           },
+          const SingleActivator(LogicalKeyboardKey.keyC): _openBrowser,
+          const SingleActivator(LogicalKeyboardKey.enter): () {
+            if (_digits.isNotEmpty) {
+              _commitDigits();
+            } else {
+              _openBrowser();
+            }
+          },
+          const SingleActivator(LogicalKeyboardKey.numpadEnter): () {
+            if (_digits.isNotEmpty) {
+              _commitDigits();
+            } else {
+              _openBrowser();
+            }
+          },
+          const SingleActivator(LogicalKeyboardKey.keyH): _toggleHelp,
+          const SingleActivator(LogicalKeyboardKey.f1): _toggleHelp,
+          const SingleActivator(LogicalKeyboardKey.keyS): () {
+            unawaited(showTrackSheet(context, _player));
+          },
+          const SingleActivator(LogicalKeyboardKey.keyA): _cycleAudio,
+          const SingleActivator(LogicalKeyboardKey.keyJ): _cycleSubtitle,
+          const SingleActivator(LogicalKeyboardKey.keyZ): _cycleAspect,
+          const SingleActivator(LogicalKeyboardKey.keyT): _toggleDeinterlace,
+          const SingleActivator(LogicalKeyboardKey.bracketLeft): () =>
+              _nudgeAudioDelay(-0.05),
+          const SingleActivator(LogicalKeyboardKey.bracketRight): () =>
+              _nudgeAudioDelay(0.05),
+          const SingleActivator(LogicalKeyboardKey.digit0): () => _digit(0),
+          const SingleActivator(LogicalKeyboardKey.digit1): () => _digit(1),
+          const SingleActivator(LogicalKeyboardKey.digit2): () => _digit(2),
+          const SingleActivator(LogicalKeyboardKey.digit3): () => _digit(3),
+          const SingleActivator(LogicalKeyboardKey.digit4): () => _digit(4),
+          const SingleActivator(LogicalKeyboardKey.digit5): () => _digit(5),
+          const SingleActivator(LogicalKeyboardKey.digit6): () => _digit(6),
+          const SingleActivator(LogicalKeyboardKey.digit7): () => _digit(7),
+          const SingleActivator(LogicalKeyboardKey.digit8): () => _digit(8),
+          const SingleActivator(LogicalKeyboardKey.digit9): () => _digit(9),
+          const SingleActivator(LogicalKeyboardKey.numpad0): () => _digit(0),
+          const SingleActivator(LogicalKeyboardKey.numpad1): () => _digit(1),
+          const SingleActivator(LogicalKeyboardKey.numpad2): () => _digit(2),
+          const SingleActivator(LogicalKeyboardKey.numpad3): () => _digit(3),
+          const SingleActivator(LogicalKeyboardKey.numpad4): () => _digit(4),
+          const SingleActivator(LogicalKeyboardKey.numpad5): () => _digit(5),
+          const SingleActivator(LogicalKeyboardKey.numpad6): () => _digit(6),
+          const SingleActivator(LogicalKeyboardKey.numpad7): () => _digit(7),
+          const SingleActivator(LogicalKeyboardKey.numpad8): () => _digit(8),
+          const SingleActivator(LogicalKeyboardKey.numpad9): () => _digit(9),
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+              _adjustVolume(5),
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+              _adjustVolume(-5),
+          const SingleActivator(LogicalKeyboardKey.equal): () =>
+              _adjustVolume(5),
+          const SingleActivator(LogicalKeyboardKey.numpadAdd): () =>
+              _adjustVolume(5),
+          const SingleActivator(LogicalKeyboardKey.minus): () =>
+              _adjustVolume(-5),
+          const SingleActivator(LogicalKeyboardKey.numpadSubtract): () =>
+              _adjustVolume(-5),
         },
         child: Focus(
           autofocus: true,
@@ -849,6 +1362,72 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
+  Widget _infoBanner(AppState state) {
+    final strings = context.strings;
+    final use24 = state.settings.use24HourTime;
+    final now = state.epg.nowFor(_channel, state.now);
+    final next = state.epg.nextFor(_channel, state.now);
+    final params = _videoParams;
+    final width = params?.w ?? 0;
+    final height = params?.h ?? 0;
+    final props = _infoProps;
+
+    String range(Programme programme) =>
+        '${strings.formatTime(programme.start, use24HourTime: use24)} – '
+        '${strings.formatTime(programme.stop, use24HourTime: use24)}';
+
+    double? progress;
+    if (now != null) {
+      final total = now.stop.difference(now.start).inSeconds;
+      if (total > 0) {
+        progress = state.now.difference(now.start).inSeconds / total;
+      }
+    }
+
+    final fps = double.tryParse(props['estimated-vf-fps'] ?? '');
+    final channels = props['audio-params/hr-channels'];
+    final decoder = props['hwdec-current'];
+    final chips = <String>[
+      if (width > 0 && height > 0) '$width×$height',
+      if (props['video-codec'] != null)
+        props['video-codec']!.split(' ').first.toUpperCase(),
+      if (fps != null && fps > 0) '${fps.round()} fps',
+      if (props['audio-codec-name'] != null)
+        <String>[
+          props['audio-codec-name']!.toUpperCase(),
+          if (channels != null && channels.isNotEmpty) channels,
+        ].join(' '),
+      if (decoder != null && decoder != 'no') decoder,
+      if (props['frame-drop-count'] != null &&
+          props['frame-drop-count'] != '0')
+        '${strings.infoDropped} ${props['frame-drop-count']}',
+    ];
+
+    final clock = state.now;
+    return StbBanner(
+      data: StbBannerData(
+        logo: ChannelLogo(
+          channel: _channel,
+          allowInsecure: state.activeSource?.allowInsecureCerts ?? false,
+          size: 92,
+          radius: 18,
+        ),
+        number: _channel.displayNumber,
+        name: _channel.name,
+        clock: strings.formatTime(clock, use24HourTime: use24),
+        nowLabel: strings.now,
+        nextLabel: strings.next,
+        nowTitle: now?.displayTitle,
+        nowRange: now == null ? null : range(now),
+        progress: progress,
+        nowDescription: now?.description,
+        nextTitle: next?.displayTitle,
+        nextRange: next == null ? null : range(next),
+        chips: chips,
+      ),
+    );
+  }
+
   Widget _videoLayer(AppState state, {required bool immersive}) {
     final strings = context.strings;
     final colors = context.mawjColors;
@@ -862,7 +1441,9 @@ class _PlayerPageState extends State<PlayerPage> {
           Size(constraints.maxWidth, constraints.maxHeight),
           MediaQuery.devicePixelRatioOf(context),
         );
-        return MouseRegion(
+        return Listener(
+          onPointerSignal: _isDesktop ? _onScroll : null,
+          child: MouseRegion(
           onHover: (_) => _showControls(),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -886,7 +1467,10 @@ class _PlayerPageState extends State<PlayerPage> {
                   key: _videoKey,
                   controller: _controller,
                   controls: NoVideoControls,
-                  fit: BoxFit.contain,
+                  fit: _aspectMode == 4
+                      ? BoxFit.cover
+                      : (_aspectMode == 0 ? BoxFit.contain : BoxFit.fill),
+                  aspectRatio: _aspectRatios[_aspectMode],
                 ),
                 if (dim > 0)
                   IgnorePointer(
@@ -914,6 +1498,7 @@ class _PlayerPageState extends State<PlayerPage> {
                           const SizedBox(height: 10),
                           Text(
                             strings.tuning,
+                            textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: Colors.white70,
                               fontWeight: FontWeight.w600,
@@ -925,16 +1510,38 @@ class _PlayerPageState extends State<PlayerPage> {
                   ),
                 if (problem) _buildProblem(strings),
                 _buildControls(state, immersive: immersive, constraints: constraints),
+                if (_infoVisible && _osdKind == null)
+                  IgnorePointer(child: _infoBanner(state)),
+                if (_browserOpen)
+                  StbChannelBrowser(
+                    channels: state.channels,
+                    favorites: state.favorites,
+                    groups: state.groups,
+                    initialGroup: _browserGroup,
+                    current: _channel,
+                    now: state.now,
+                    nowFor: (channel) => state.epg.nowFor(channel, state.now),
+                    allowInsecure:
+                        state.activeSource?.allowInsecureCerts ?? false,
+                    onTune: _tuneFromBrowser,
+                    onGroupChanged: (group) => _browserGroup = group,
+                    onClose: _closeBrowser,
+                  ),
+                if (_helpOpen) StbHelpOverlay(onClose: _toggleHelp),
                 if (_osdKind != null)
                   IgnorePointer(
                     child: _GestureOsd(
                       kind: _osdKind!,
                       value: _osdValue,
                       strings: strings,
+                      icon: _osdIcon,
+                      title: _osdTitle,
+                      subtitle: _osdSubtitle,
                     ),
                   ),
               ],
             ),
+          ),
           ),
         );
       },
@@ -1021,6 +1628,239 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
+  /// Desktop layout: a slim title bar and one control bar along the bottom,
+  /// like a desktop player, instead of the large touch buttons.
+  Widget _desktopControls(AppState state, Programme? current) {
+    final strings = context.strings;
+    final colors = context.mawjColors;
+    final favorite = state.isFavorite(_channel);
+    final use24 = state.settings.use24HourTime;
+    const white = Colors.white;
+
+    Widget icon(
+      IconData data,
+      String tooltip,
+      VoidCallback onPressed, {
+      Color color = white,
+    }) {
+      return IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        icon: Icon(data, color: color),
+        iconSize: 22,
+        visualDensity: VisualDensity.compact,
+        splashRadius: 20,
+      );
+    }
+
+    final visible = _controlsVisible && !_browserOpen && !_helpOpen;
+    final compact = MediaQuery.sizeOf(context).width < 980;
+    return ExcludeFocus(
+      child: IgnorePointer(
+      ignoring: !visible,
+      child: AnimatedOpacity(
+        opacity: visible ? 1 : 0,
+        duration: const Duration(milliseconds: 160),
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            Align(
+              alignment: Alignment.topCenter,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[Color(0xB3000000), Color(0x00000000)],
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 22),
+                  child: Row(
+                    children: <Widget>[
+                      icon(Icons.arrow_back_rounded, strings.back, () {
+                        if (_fullscreen) {
+                          unawaited(_toggleFullscreen());
+                        } else {
+                          Navigator.of(context).maybePop();
+                        }
+                      }),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: BidiText(
+                          '${_channel.displayNumber}  ${_channel.name}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: <Color>[Color(0xCC000000), Color(0x00000000)],
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 34, 12, 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      if (current != null) ...<Widget>[
+                        Row(
+                          children: <Widget>[
+                            Flexible(
+                              child: BidiText(
+                                current.displayTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              strings.formatRange(
+                                current.start,
+                                current.stop,
+                                use24HourTime: use24,
+                              ),
+                              style: TextStyle(
+                                color: white.withValues(alpha: 0.7),
+                                fontSize: 12,
+                                fontFeatures: const <FontFeature>[
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: LinearProgressIndicator(
+                            value: current.progressAt(state.now),
+                            minHeight: 3,
+                            color: colors.accent,
+                            backgroundColor: Colors.white24,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      Row(
+                        children: <Widget>[
+                          icon(Icons.skip_previous_rounded, strings.previousChannel,
+                              () => _zap(-1)),
+                          icon(
+                            _playing
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            _playing ? strings.pause : strings.play,
+                            () => unawaited(_player.playOrPause()),
+                          ),
+                          icon(Icons.skip_next_rounded, strings.nextChannel,
+                              () => _zap(1)),
+                          StreamBuilder<double>(
+                            stream: _player.stream.volume,
+                            initialData: _player.state.volume,
+                            builder: (context, snapshot) {
+                              final volume =
+                                  snapshot.data ?? _player.state.volume;
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  icon(
+                                    volume <= 0.01
+                                        ? Icons.volume_off_rounded
+                                        : Icons.volume_up_rounded,
+                                    volume <= 0.01 ? strings.unmute : strings.mute,
+                                    _toggleMute,
+                                  ),
+                                  SizedBox(
+                                    width: 110,
+                                    child: SliderTheme(
+                                      data: SliderTheme.of(context).copyWith(
+                                        trackHeight: 3,
+                                        thumbShape: const RoundSliderThumbShape(
+                                          enabledThumbRadius: 6,
+                                        ),
+                                        overlayShape:
+                                            SliderComponentShape.noOverlay,
+                                      ),
+                                      child: Slider(
+                                        value: volume.clamp(0.0, 100.0).toDouble(),
+                                        max: 100,
+                                        onChanged: (value) =>
+                                            unawaited(_player.setVolume(value)),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                          const Spacer(),
+                          icon(
+                            favorite
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            favorite ? strings.removeFavorite : strings.addFavorite,
+                            () => unawaited(state.toggleFavorite(_channel)),
+                            color: favorite ? colors.accent : white,
+                          ),
+                          icon(Icons.list_rounded, strings.channelListTooltip,
+                              _openBrowser),
+                          icon(Icons.subtitles_rounded, strings.audioAndSubtitles,
+                              () => unawaited(showTrackSheet(context, _player))),
+                          if (!compact) ...<Widget>[
+                            icon(Icons.aspect_ratio_rounded, strings.aspectTooltip,
+                                _cycleAspect),
+                            icon(Icons.info_outline_rounded, strings.infoTooltip,
+                                _toggleInfo),
+                            icon(Icons.keyboard_alt_outlined, strings.helpTooltip,
+                                _toggleHelp),
+                          ],
+                          icon(Icons.monitor_heart_outlined, strings.diagnostics,
+                              () => unawaited(_showDiagnostics())),
+                          icon(
+                            _fullscreen
+                                ? Icons.fullscreen_exit_rounded
+                                : Icons.fullscreen_rounded,
+                            _fullscreen
+                                ? strings.exitFullScreen
+                                : strings.fullScreen,
+                            () => unawaited(_toggleFullscreen()),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      ),
+    );
+  }
+
   Widget _buildControls(
     AppState state, {
     required bool immersive,
@@ -1033,6 +1873,10 @@ class _PlayerPageState extends State<PlayerPage> {
     final showStrip = immersive && constraints.maxHeight >= 420;
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
     final current = state.epg.nowFor(_channel, state.now);
+
+    if (kIsDesktop) {
+      return _desktopControls(state, current);
+    }
 
     return IgnorePointer(
       ignoring: !_controlsVisible,
@@ -1088,26 +1932,19 @@ class _PlayerPageState extends State<PlayerPage> {
                                 fontSize: 16,
                               ),
                             ),
-                            Text(
-                              '${strings.channel} ${_channel.displayNumber}',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.65),
-                                fontSize: 12,
-                              ),
+                            Row(
+                              children: <Widget>[
+                                Text(
+                                  '${strings.channel} ${_channel.displayNumber}',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.65),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ),
-                      _RoundButton(
-                        tooltip: favorite
-                            ? strings.removeFavorite
-                            : strings.addFavorite,
-                        icon: favorite
-                            ? Icons.star_rounded
-                            : Icons.star_outline_rounded,
-                        color: favorite ? colors.accent : Colors.white,
-                        onPressed: () =>
-                            unawaited(state.toggleFavorite(_channel)),
                       ),
                       _RoundButton(
                         tooltip: strings.diagnostics,
@@ -1182,6 +2019,33 @@ class _PlayerPageState extends State<PlayerPage> {
                 },
               ),
             ),
+            // Track and favourite buttons, bottom end: the top bar is too crowded on a
+            // phone held upright.
+            PositionedDirectional(
+              bottom: 8 + padding.bottom + (showStrip ? 132 : 0),
+              end: 8 + padding.right,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  _RoundButton(
+                    tooltip: strings.audioAndSubtitles,
+                    icon: Icons.subtitles_rounded,
+                    onPressed: () => unawaited(showTrackSheet(context, _player)),
+                  ),
+                  const SizedBox(width: 8),
+                  _RoundButton(
+                    tooltip: favorite
+                        ? strings.removeFavorite
+                        : strings.addFavorite,
+                    icon: favorite
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    color: favorite ? colors.accent : Colors.white,
+                    onPressed: () => unawaited(state.toggleFavorite(_channel)),
+                  ),
+                ],
+              ),
+            ),
             if (immersive)
               Align(
                 alignment: Alignment.bottomCenter,
@@ -1206,7 +2070,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       children: <Widget>[
                         if (current != null) ...<Widget>[
                           BidiText(
-                            current.title,
+                            current.displayTitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -1316,7 +2180,7 @@ class PlayerInfoPanel extends StatelessWidget {
           const SizedBox(height: 20),
           if (current != null) ...<Widget>[
             BidiText(
-              current.title,
+              current.displayTitle,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w800,
                 height: 1.2,
@@ -1412,7 +2276,7 @@ class PlayerInfoPanel extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         BidiText(
-                          next.title,
+                          next.displayTitle,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodyMedium?.copyWith(
@@ -1550,23 +2414,47 @@ class PlayerChannelStripState extends State<PlayerChannelStrip> {
   }
 }
 
-enum _OsdKind { brightness, volume }
+enum _OsdKind { brightness, volume, message }
 
 class _GestureOsd extends StatelessWidget {
   const _GestureOsd({
     required this.kind,
     required this.value,
     required this.strings,
+    this.icon,
+    this.title,
+    this.subtitle,
   });
 
   final _OsdKind kind;
   final double value;
   final AppStrings strings;
+  final IconData? icon;
+  final String? title;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
     final brightness = kind == _OsdKind.brightness;
     final percent = (value * 100).round();
+    if (kind == _OsdKind.message) {
+      return StbMessageOsd(
+        icon: icon ?? Icons.info_outline_rounded,
+        title: title ?? '',
+        subtitle: subtitle,
+      );
+    }
+    if (kIsDesktop) {
+      return StbValueOsd(
+        icon: brightness
+            ? Icons.brightness_6_rounded
+            : (percent == 0
+                ? Icons.volume_off_rounded
+                : Icons.volume_up_rounded),
+        label: brightness ? strings.brightness : strings.volume,
+        value: value,
+      );
+    }
     return Center(
       child: Container(
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),

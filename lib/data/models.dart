@@ -46,6 +46,48 @@ class SourceEndpoint {
   }
 }
 
+/// How a source is configured. Tunarr and ErsatzTV only need the service
+/// address; the playlist and guide locations follow from it.
+enum SourceType {
+  generic,
+  tunarr,
+  ersatztv;
+
+  /// Turns what the user typed into a base URL without a trailing slash,
+  /// assuming http:// for a bare host.
+  static String normalizeBase(String input) {
+    var value = input.trim();
+    if (value.isEmpty) {
+      return value;
+    }
+    if (!value.contains('://')) {
+      value = 'http://$value';
+    }
+    while (value.endsWith('/')) {
+      value = value.substring(0, value.length - 1);
+    }
+    return value;
+  }
+
+  String playlistUrl(String base) {
+    final root = normalizeBase(base);
+    return switch (this) {
+      SourceType.tunarr => '$root/api/channels.m3u',
+      SourceType.ersatztv => '$root/iptv/channels.m3u',
+      SourceType.generic => root,
+    };
+  }
+
+  String guideUrl(String base) {
+    final root = normalizeBase(base);
+    return switch (this) {
+      SourceType.tunarr => '$root/api/xmltv.xml',
+      SourceType.ersatztv => '$root/iptv/xmltv.xml',
+      SourceType.generic => '',
+    };
+  }
+}
+
 class SourceConfig {
   const SourceConfig({
     required this.id,
@@ -53,7 +95,33 @@ class SourceConfig {
     required this.m3u,
     required this.epg,
     this.allowInsecureCerts = false,
+    this.type = SourceType.generic,
+    this.baseUrl = '',
   });
+
+  /// A Tunarr or ErsatzTV source built from just the service address.
+  factory SourceConfig.service({
+    required String id,
+    required String name,
+    required SourceType type,
+    required String baseUrl,
+    bool allowInsecureCerts = false,
+  }) {
+    final base = SourceType.normalizeBase(baseUrl);
+    return SourceConfig(
+      id: id,
+      name: name,
+      m3u: SourceEndpoint(value: type.playlistUrl(base)),
+      epg: SourceEndpoint(value: type.guideUrl(base)),
+      allowInsecureCerts: allowInsecureCerts,
+      type: type,
+      baseUrl: base,
+    );
+  }
+
+  final SourceType type;
+  final String baseUrl;
+  bool get isService => type != SourceType.generic;
 
   final String id;
   final String name;
@@ -73,6 +141,8 @@ class SourceConfig {
       m3u: m3u ?? this.m3u,
       epg: epg ?? this.epg,
       allowInsecureCerts: allowInsecureCerts ?? this.allowInsecureCerts,
+      type: type,
+      baseUrl: baseUrl,
     );
   }
 
@@ -82,6 +152,8 @@ class SourceConfig {
         'm3u': m3u.toJson(),
         'epg': epg.toJson(),
         'allowInsecureCerts': allowInsecureCerts,
+        'type': type.name,
+        'baseUrl': baseUrl,
       };
 
   factory SourceConfig.fromJson(Map<String, dynamic> json) {
@@ -93,6 +165,11 @@ class SourceConfig {
       m3u: SourceEndpoint.fromJson(json['m3u']),
       epg: SourceEndpoint.fromJson(json['epg']),
       allowInsecureCerts: json['allowInsecureCerts'] as bool? ?? false,
+      type: SourceType.values.firstWhere(
+        (value) => value.name == json['type'],
+        orElse: () => SourceType.generic,
+      ),
+      baseUrl: json['baseUrl'] as String? ?? '',
     );
   }
 }
@@ -124,6 +201,41 @@ class Channel {
   String get displayNumber => number.isEmpty ? '—' : number;
 }
 
+/// One person credited on a programme: an actor (with the role they play),
+/// a director, a writer and so on. [role] is the XMLTV element name.
+class ProgrammeCredit {
+  const ProgrammeCredit({
+    required this.role,
+    required this.name,
+    this.character,
+  });
+
+  final String role;
+  final String name;
+  final String? character;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'role': role,
+        'name': name,
+        'character': character,
+      };
+
+  static ProgrammeCredit? fromJson(Object? json) {
+    if (json is! Map) {
+      return null;
+    }
+    final name = json['name'] as String? ?? '';
+    if (name.isEmpty) {
+      return null;
+    }
+    return ProgrammeCredit(
+      role: json['role'] as String? ?? 'actor',
+      name: name,
+      character: json['character'] as String?,
+    );
+  }
+}
+
 class Programme {
   const Programme({
     required this.channelId,
@@ -135,6 +247,13 @@ class Programme {
     this.categories = const <String>[],
     this.iconUrl,
     this.episode,
+    this.credits = const <ProgrammeCredit>[],
+    this.date,
+    this.keywords = const <String>[],
+    this.lengthSeconds,
+    this.rating,
+    this.posterUrl,
+    this.previouslyShown = false,
   });
 
   final String channelId;
@@ -146,6 +265,50 @@ class Programme {
   final List<String> categories;
   final String? iconUrl;
   final String? episode;
+
+  /// Cast and crew in document order.
+  final List<ProgrammeCredit> credits;
+
+  /// Original air date or production year, as the guide wrote it.
+  final String? date;
+  final List<String> keywords;
+
+  /// Length of the programme itself when the guide states it.
+  final int? lengthSeconds;
+  final String? rating;
+
+  /// Portrait artwork when the guide has both it and a landscape image;
+  /// [iconUrl] is the best landscape one.
+  final String? posterUrl;
+  final bool previouslyShown;
+
+  /// Episode number and sub-title for one line of text, e.g.
+  /// `S01E05 · The Cat Concerto`. Either half may be missing.
+  String? get subtitleLine {
+    final number = episode?.trim() ?? '';
+    final name = subTitle?.trim() ?? '';
+    if (number.isEmpty && name.isEmpty) {
+      return null;
+    }
+    if (number.isEmpty) {
+      return name;
+    }
+    if (name.isEmpty) {
+      return number;
+    }
+    if (name.toLowerCase().contains(number.toLowerCase())) {
+      return name;
+    }
+    return '$number · $name';
+  }
+
+  /// Title with the episode label, e.g. `Foo · S01E05`, for tight lists.
+  String get displayTitle =>
+      episode == null || episode!.isEmpty ? title : '$title · $episode';
+
+  List<ProgrammeCredit> creditsOf(String role) => credits
+      .where((credit) => credit.role == role)
+      .toList(growable: false);
 
   bool isLiveAt(DateTime now) => !now.isBefore(start) && now.isBefore(stop);
 
@@ -263,14 +426,19 @@ class AppSettings {
     required this.language,
     required this.use24HourTime,
     this.activeSourceId,
-    this.useMpvWindow = true,
-    this.hwdec = 'auto-safe',
+    this.useMpvWindow = false,
+    this.hwdec = 'config',
     this.videoOutput = 'auto',
-    this.useMpvConfig = false,
+    this.useMpvConfig = true,
     this.startFullscreen = false,
     this.mpvPath = '',
     this.autoRefreshMinutes = 360,
     this.guideHours = 12,
+    this.inAppRenderer = 'auto',
+    this.preferredAudioLang = '',
+    this.preferredSubtitleLang = 'off',
+    this.rememberTracks = true,
+    this.zapBanner = true,
   });
 
   factory AppSettings.defaults() => const AppSettings(
@@ -299,6 +467,22 @@ class AppSettings {
   /// Load the user's own `~/.config/mpv` configuration and scripts.
   final bool useMpvConfig;
 
+  /// Desktop in-window video: `auto` and `gpu` use the GPU renderer, `cpu` is
+  /// the software fallback if a driver ever misbehaves.
+  final String inAppRenderer;
+
+  /// Audio language to prefer (ISO 639, empty = the stream's own default).
+  final String preferredAudioLang;
+
+  /// Subtitle language to prefer, or `off`.
+  final String preferredSubtitleLang;
+
+  /// Remember the audio/subtitle choice per channel.
+  final bool rememberTracks;
+
+  /// Show the channel banner when zapping on desktop.
+  final bool zapBanner;
+
   /// Open the mpv window fullscreen.
   final bool startFullscreen;
 
@@ -325,6 +509,11 @@ class AppSettings {
     String? mpvPath,
     int? autoRefreshMinutes,
     int? guideHours,
+    String? inAppRenderer,
+    String? preferredAudioLang,
+    String? preferredSubtitleLang,
+    bool? rememberTracks,
+    bool? zapBanner,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -342,6 +531,12 @@ class AppSettings {
       mpvPath: mpvPath ?? this.mpvPath,
       autoRefreshMinutes: autoRefreshMinutes ?? this.autoRefreshMinutes,
       guideHours: guideHours ?? this.guideHours,
+      inAppRenderer: inAppRenderer ?? this.inAppRenderer,
+      preferredAudioLang: preferredAudioLang ?? this.preferredAudioLang,
+      preferredSubtitleLang:
+          preferredSubtitleLang ?? this.preferredSubtitleLang,
+      rememberTracks: rememberTracks ?? this.rememberTracks,
+      zapBanner: zapBanner ?? this.zapBanner,
     );
   }
 
@@ -359,9 +554,16 @@ class AppSettings {
         'mpvPath': mpvPath,
         'autoRefreshMinutes': autoRefreshMinutes,
         'guideHours': guideHours,
+        'inAppRenderer': inAppRenderer,
+        'preferredAudioLang': preferredAudioLang,
+        'preferredSubtitleLang': preferredSubtitleLang,
+        'rememberTracks': rememberTracks,
+        'zapBanner': zapBanner,
+        'settingsVersion': 2,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
+    final migrated = (json['settingsVersion'] as int? ?? 1) < 2;
     return AppSettings(
       themeFamily: _enumByName(
         ThemeFamily.values,
@@ -380,14 +582,28 @@ class AppSettings {
       ),
       use24HourTime: json['use24HourTime'] as bool? ?? false,
       activeSourceId: json['activeSourceId'] as String?,
-      useMpvWindow: json['useMpvWindow'] as bool? ?? true,
-      hwdec: json['hwdec'] as String? ?? 'auto-safe',
+      // The in-window GPU player is the default; the external system mpv is
+      // an option. Settings saved before version 2 predate the GPU player.
+      useMpvWindow:
+          migrated ? false : (json['useMpvWindow'] as bool? ?? false),
+      // Settings before version 2 forced 'auto-safe' and a clean mpv; now the
+      // user's own mpv config decides unless they chose a decoder themselves.
+      hwdec: migrated
+          ? 'config'
+          : (json['hwdec'] as String? ?? 'config'),
       videoOutput: json['videoOutput'] as String? ?? 'auto',
-      useMpvConfig: json['useMpvConfig'] as bool? ?? false,
+      useMpvConfig:
+          migrated ? true : (json['useMpvConfig'] as bool? ?? true),
       startFullscreen: json['startFullscreen'] as bool? ?? false,
       mpvPath: json['mpvPath'] as String? ?? '',
       autoRefreshMinutes: json['autoRefreshMinutes'] as int? ?? 360,
       guideHours: json['guideHours'] as int? ?? 12,
+      inAppRenderer: json['inAppRenderer'] as String? ?? 'auto',
+      preferredAudioLang: json['preferredAudioLang'] as String? ?? '',
+      preferredSubtitleLang:
+          json['preferredSubtitleLang'] as String? ?? 'off',
+      rememberTracks: json['rememberTracks'] as bool? ?? true,
+      zapBanner: json['zapBanner'] as bool? ?? true,
     );
   }
 }

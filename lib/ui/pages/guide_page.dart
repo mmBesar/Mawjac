@@ -85,7 +85,7 @@ class _GuidePageState extends State<GuidePage> {
 
   static bool _matches(Programme programme, String needle) {
     return normalizeForSearch(
-      '${programme.title} ${programme.subTitle ?? ''}',
+      '${programme.title} ${programme.subTitle ?? ''} ${programme.episode ?? ''}',
     ).contains(needle);
   }
 
@@ -750,9 +750,9 @@ class _Block extends StatelessWidget {
                                 height: 1.2,
                               ),
                             ),
-                            if (roomy && programme.subTitle != null)
+                            if (roomy && programme.subtitleLine != null)
                               BidiText(
-                                programme.subTitle!,
+                                programme.subtitleLine!,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.labelSmall?.copyWith(

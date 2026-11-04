@@ -208,9 +208,9 @@ class _ChannelTileState extends State<ChannelTile> {
                         color: colors.subtext1,
                       ),
                     ),
-                    if (programme?.subTitle != null)
+                    if (programme?.subtitleLine != null)
                       BidiText(
-                        programme!.subTitle!,
+                        programme!.subtitleLine!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -232,9 +232,9 @@ class _ChannelTileState extends State<ChannelTile> {
                     if (widget.next != null) ...<Widget>[
                       const SizedBox(height: 4),
                       BidiText(
-                        widget.next!.subTitle == null
+                        widget.next!.subtitleLine == null
                             ? '${strings.next} · ${widget.next!.title}'
-                            : '${strings.next} · ${widget.next!.title} — ${widget.next!.subTitle}',
+                            : '${strings.next} · ${widget.next!.title} — ${widget.next!.subtitleLine}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(

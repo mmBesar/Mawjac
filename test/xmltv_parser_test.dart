@@ -182,4 +182,93 @@ void main() {
     expect(parseXmltvTime('2026-10-28 17:00'), isNull);
     expect(parseXmltvTime(null), isNull);
   });
+
+  group('rich programme data', () {
+    // A recent window so the programme is kept whatever day the test runs.
+    String stamp(DateTime time) {
+      final utc = time.toUtc();
+      String two(int v) => v.toString().padLeft(2, '0');
+      return '${utc.year}${two(utc.month)}${two(utc.day)}'
+          '${two(utc.hour)}${two(utc.minute)}${two(utc.second)} +0000';
+    }
+
+    final now = DateTime.now();
+    final start = stamp(now.subtract(const Duration(minutes: 10)));
+    final stop = stamp(now.add(const Duration(minutes: 20)));
+
+    test('Tunarr: episode number from xmltv_ns, credits, length, rating', () {
+      final xml = '''
+<tv>
+  <channel id="C1.tunarr.com"><display-name>Arabic One</display-name></channel>
+  <programme start="$start" stop="$stop" channel="C1.tunarr.com">
+    <title>Tom and Jerry</title>
+    <sub-title>The Cat Concerto</sub-title>
+    <desc>A concert goes wrong.</desc>
+    <date>1947</date>
+    <category>Animation</category>
+    <keyword>cat</keyword>
+    <keyword>mouse</keyword>
+    <length units="seconds">420</length>
+    <icon src="https://example.com/poster.jpg"/>
+    <episode-num system="xmltv_ns">0.4.0/1</episode-num>
+    <rating system="VCHIP"><value>TV-Y7</value></rating>
+    <credits>
+      <director>William Hanna</director>
+      <actor role="Tom">Mel Blanc</actor>
+    </credits>
+  </programme>
+</tv>''';
+      final result = parser.parse(xml, channels);
+      final programme = result.epg.programmesFor(channels.first).single;
+      expect(programme.episode, 'S01E05');
+      expect(programme.subtitleLine, 'S01E05 · The Cat Concerto');
+      expect(programme.displayTitle, 'Tom and Jerry · S01E05');
+      expect(programme.date, '1947');
+      expect(programme.keywords, <String>['cat', 'mouse']);
+      expect(programme.lengthSeconds, 420);
+      expect(programme.rating, 'TV-Y7 (VCHIP)');
+      expect(programme.iconUrl, 'https://example.com/poster.jpg');
+      expect(programme.creditsOf('director').single.name, 'William Hanna');
+      expect(programme.creditsOf('actor').single.character, 'Tom');
+    });
+
+    test('ErsatzTV: onscreen number wins, landscape still beats poster', () {
+      final xml = '''
+<tv>
+  <channel id="C1.tunarr.com"><display-name>Arabic One</display-name></channel>
+  <programme start="$start" stop="$stop" channel="C1.tunarr.com">
+    <title lang="en">Show</title>
+    <category lang="en">Drama</category>
+    <episode-num system="onscreen">S02E10</episode-num>
+    <episode-num system="xmltv_ns">1.9.</episode-num>
+    <icon src="https://example.com/poster.jpg"/>
+    <image type="poster" orient="P">https://example.com/p.jpg</image>
+    <image type="still" orient="L">https://example.com/still.jpg</image>
+    <previously-shown/>
+  </programme>
+</tv>''';
+      final programme = parser
+          .parse(xml, channels)
+          .epg
+          .programmesFor(channels.first)
+          .single;
+      expect(programme.episode, 'S02E10');
+      expect(programme.subtitleLine, 'S02E10');
+      expect(programme.iconUrl, 'https://example.com/still.jpg');
+      expect(programme.posterUrl, 'https://example.com/p.jpg');
+      expect(programme.previouslyShown, isTrue);
+    });
+
+    test('does not repeat an episode number already in the sub-title', () {
+      final programme = Programme(
+        channelId: 'x',
+        start: DateTime(2026),
+        stop: DateTime(2026, 1, 2),
+        title: 'T',
+        subTitle: 'S01E05 - Name',
+        episode: 'S01E05',
+      );
+      expect(programme.subtitleLine, 'S01E05 - Name');
+    });
+  });
 }

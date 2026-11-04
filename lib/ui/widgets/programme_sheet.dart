@@ -35,6 +35,17 @@ class _ProgrammeSheet extends StatelessWidget {
   final Channel channel;
   final Programme programme;
 
+  /// Original date, length, rating and the repeat marker, in that order.
+  List<String> _facts(AppStrings strings) {
+    final length = programme.lengthSeconds;
+    return <String>[
+      if (programme.date != null) programme.date!,
+      if (length != null) strings.lengthMinutes((length / 60).round()),
+      if (programme.rating != null) programme.rating!,
+      if (programme.previouslyShown) strings.repeatShowing,
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -84,10 +95,10 @@ class _ProgrammeSheet extends StatelessWidget {
                         height: 1.25,
                       ),
                     ),
-                    if (programme.subTitle != null) ...<Widget>[
+                    if (programme.subtitleLine != null) ...<Widget>[
                       const SizedBox(height: 4),
                       BidiText(
-                        programme.subTitle!,
+                        programme.subtitleLine!,
                         style: theme.textTheme.titleSmall?.copyWith(
                           color: colors.subtext0,
                         ),
@@ -104,10 +115,10 @@ class _ProgrammeSheet extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (programme.episode != null) ...<Widget>[
+                    if (_facts(strings).isNotEmpty) ...<Widget>[
                       const SizedBox(height: 4),
-                      Text(
-                        programme.episode!,
+                      BidiText(
+                        _facts(strings).join(' · '),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colors.overlay1,
                         ),
@@ -192,6 +203,55 @@ class _ProgrammeSheet extends StatelessWidget {
               ],
             ),
           ],
+          if (programme.keywords.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                for (final keyword in programme.keywords)
+                  BidiText(
+                    '#$keyword',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: colors.overlay1,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          for (final role in const <String>[
+            'director',
+            'writer',
+            'presenter',
+            'producer',
+            'actor',
+            'guest',
+          ])
+            if (programme.creditsOf(role).isNotEmpty) ...<Widget>[
+              const SizedBox(height: 16),
+              Text(
+                strings.creditRole(role),
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: colors.subtext0,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              BidiText(
+                programme
+                    .creditsOf(role)
+                    .map(
+                      (credit) => credit.character == null
+                          ? credit.name
+                          : '${credit.name} (${credit.character})',
+                    )
+                    .join(' · '),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.subtext1,
+                  height: 1.5,
+                ),
+              ),
+            ],
           const SizedBox(height: 22),
           Row(
             children: <Widget>[

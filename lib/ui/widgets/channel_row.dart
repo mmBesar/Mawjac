@@ -146,9 +146,9 @@ class ChannelRow extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (current.subTitle != null)
+                        if (current.subtitleLine != null)
                           BidiText(
-                            current.subTitle!,
+                            current.subtitleLine!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
@@ -165,9 +165,9 @@ class ChannelRow extends StatelessWidget {
                         if (next != null) ...<Widget>[
                           const SizedBox(height: 2),
                           BidiText(
-                            next!.subTitle == null
+                            next!.subtitleLine == null
                                 ? '${strings.next} · ${next!.title}'
-                                : '${strings.next} · ${next!.title} — ${next!.subTitle}',
+                                : '${strings.next} · ${next!.title} — ${next!.subtitleLine}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(

@@ -11,6 +11,8 @@ import '../../core/theme.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../data/mpv_runtime.dart';
+import '../../l10n/languages.dart';
+import '../../l10n/player_strings.dart';
 import '../../l10n/strings.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -155,6 +157,106 @@ class SettingsPage extends StatelessWidget {
                   ],
                 ),
                 if (kIsDesktop) const _PlayerSettings(),
+                _Section(
+                  title: strings.audioAndSubtitles,
+                  children: <Widget>[
+                    InputDecorator(
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.audiotrack_rounded),
+                        labelText: strings.preferredAudio,
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _langOptions.contains(settings.preferredAudioLang)
+                              ? settings.preferredAudioLang
+                              : '',
+                          isExpanded: true,
+                          isDense: true,
+                          items: <DropdownMenuItem<String>>[
+                            DropdownMenuItem<String>(
+                              value: '',
+                              child: Text(strings.streamDefault),
+                            ),
+                            for (final code in _langOptions.where((c) => c.isNotEmpty))
+                              DropdownMenuItem<String>(
+                                value: code,
+                                child: Text(
+                                  languageName(code, arabic: strings.isArabic),
+                                ),
+                              ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              unawaited(state.setPreferredAudioLang(value));
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    InputDecorator(
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.subtitles_rounded),
+                        labelText: strings.preferredSubtitle,
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: settings.preferredSubtitleLang == 'off' ||
+                                  _langOptions.contains(settings.preferredSubtitleLang)
+                              ? settings.preferredSubtitleLang
+                              : 'off',
+                          isExpanded: true,
+                          isDense: true,
+                          items: <DropdownMenuItem<String>>[
+                            DropdownMenuItem<String>(
+                              value: 'off',
+                              child: Text(strings.subtitlesOffByDefault),
+                            ),
+                            for (final code in _langOptions.where((c) => c.isNotEmpty))
+                              DropdownMenuItem<String>(
+                                value: code,
+                                child: Text(
+                                  languageName(code, arabic: strings.isArabic),
+                                ),
+                              ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              unawaited(state.setPreferredSubtitleLang(value));
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    SwitchListTile(
+                      value: settings.rememberTracks,
+                      onChanged: (value) =>
+                          unawaited(state.setRememberTracks(value)),
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(strings.rememberTracks),
+                      subtitle: Text(
+                        strings.rememberTracksHelp,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colors.subtext0,
+                            ),
+                      ),
+                    ),
+                    if (kIsDesktop)
+                      SwitchListTile(
+                        value: settings.zapBanner,
+                        onChanged: (value) =>
+                            unawaited(state.setZapBanner(value)),
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(strings.zapBanner),
+                        subtitle: Text(
+                          strings.zapBannerHelp,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: colors.subtext0,
+                              ),
+                        ),
+                      ),
+                  ],
+                ),
                 _Section(
                   title: strings.dataAndGuide,
                   children: <Widget>[
@@ -618,6 +720,7 @@ class _PlayerSettings extends StatelessWidget {
 
   static String _hwdecLabel(AppStrings strings, String value) {
     return switch (value) {
+      'config' => strings.hwdecFromConfig,
       'auto-safe' => strings.hwdecAutoSafe,
       'auto' => strings.hwdecAuto,
       'auto-copy-safe' || 'auto-copy' => strings.hwdecAutoCopy,
@@ -643,6 +746,7 @@ class _PlayerSettings extends StatelessWidget {
             final capabilities = snapshot.data;
             final loading = snapshot.connectionState != ConnectionState.done;
             final hwdecs = <String>[
+              'config',
               'auto-safe',
               'auto',
               if (capabilities == null ||
@@ -652,7 +756,7 @@ class _PlayerSettings extends StatelessWidget {
               ...?capabilities?.specificHwdecs,
             ];
             final hwdec =
-                hwdecs.contains(settings.hwdec) ? settings.hwdec : 'auto-safe';
+                hwdecs.contains(settings.hwdec) ? settings.hwdec : 'config';
             const outputs = <String>[
               'auto',
               'gpu-next',
@@ -709,6 +813,48 @@ class _PlayerSettings extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (!settings.useMpvWindow) ...<Widget>[
+                  const SizedBox(height: 8),
+                  _FieldLabel(text: strings.inAppRenderer),
+                  DropdownButton<String>(
+                    isExpanded: true,
+                    value: const <String>['auto', 'gpu', 'cpu']
+                            .contains(settings.inAppRenderer)
+                        ? settings.inAppRenderer
+                        : 'auto',
+                    dropdownColor: colors.surface1,
+                    items: <DropdownMenuItem<String>>[
+                      DropdownMenuItem<String>(
+                        value: 'auto',
+                        child: Text(strings.rendererAuto),
+                      ),
+                      DropdownMenuItem<String>(
+                        value: 'gpu',
+                        child: Text(strings.rendererGpu),
+                      ),
+                      DropdownMenuItem<String>(
+                        value: 'cpu',
+                        child: Text(strings.rendererCpu),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        unawaited(
+                          state.updateSettings(
+                            settings.copyWith(inAppRenderer: value),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  Text(
+                    strings.inAppRendererHelp,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colors.subtext0,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
                 if (enabled && settings.useMpvWindow) ...<Widget>[
                   const SizedBox(height: 8),
                   _FieldLabel(text: strings.hardwareDecoding),
@@ -850,3 +996,26 @@ class _MpvPathFieldState extends State<_MpvPathField> {
     );
   }
 }
+
+/// Languages offered as defaults; empty is "stream default".
+const List<String> _langOptions = <String>[
+  '',
+  'ara',
+  'eng',
+  'fra',
+  'deu',
+  'spa',
+  'ita',
+  'por',
+  'rus',
+  'tur',
+  'fas',
+  'kur',
+  'hin',
+  'urd',
+  'heb',
+  'zho',
+  'jpn',
+  'kor',
+];
+

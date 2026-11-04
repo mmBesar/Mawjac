@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.mmbesar.mawjac</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Mawjac</name>
+  <summary>IPTV player for M3U playlists, XMLTV guides, Tunarr and ErsatzTV</summary>
+  <description>
+    <p>Mawjac plays live channels from M3U playlists and shows a rich programme guide from XMLTV. It works with Tunarr and ErsatzTV by just entering the server address.</p>
+    <p>Arabic and English with full right-to-left support, favourites, search, a zoomable guide timeline, and several themes including AMOLED.</p>
+  </description>
+  <launchable type="desktop-id">mawjac.desktop</launchable>
+  <url type="homepage">https://github.com/mmBesar/Mawjac</url>
+  <url type="bugtracker">https://github.com/mmBesar/Mawjac/issues</url>
+  <developer id="com.mmbesar">
+    <name>mmBesar</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Video</category>
+    <category>Player</category>
+  </categories>
+  <provides>
+    <binary>mawjac</binary>
+  </provides>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <releases>
+    <release version="0.4.0" date="2026-11-04"/>
+  </releases>
+</component>

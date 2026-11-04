@@ -12,10 +12,12 @@ import '../core/theme.dart';
 import '../data/app_state.dart';
 import '../data/models.dart';
 import '../data/mpv_runtime.dart';
+import '../l10n/player_strings.dart';
 import '../l10n/strings.dart';
 import 'player_page.dart';
 import 'widgets/channel_art.dart';
 import 'widgets/channel_logo.dart';
+import 'widgets/mpv_track_sheet.dart';
 import 'widgets/wave.dart';
 
 enum _Phase { starting, playing, failed, closed }
@@ -303,6 +305,13 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
                   )
               : null,
           icon: const Icon(Icons.fullscreen_rounded),
+        ),
+        IconButton.filledTonal(
+          tooltip: strings.audioAndSubtitles,
+          onPressed: _phase == _Phase.playing && _session != null
+              ? () => unawaited(showMpvTrackSheet(context, _session!))
+              : null,
+          icon: const Icon(Icons.subtitles_rounded),
         ),
         IconButton.filledTonal(
           tooltip: favorite ? strings.removeFavorite : strings.addFavorite,

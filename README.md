@@ -22,16 +22,15 @@ never open the video. Mawjac sets its own demuxer options without that flag.
 
 ## Desktop playback
 
-On Linux, Mawjac plays each channel in its own native **mpv** window. mpv cannot
-be embedded inside another window on Wayland, and its render API can freeze on
-some Mesa setups, so a separate window gives GPU decoding, real compositor
-fullscreen and mpv's own on-screen controls. Mawjac stays open as a remote:
-now/next, channel switching, favorites.
+By default Mawjac plays inside its own window on the GPU, with a set-top-box
+style on-screen display (channel banner, volume, channel and group browser,
+number entry, audio/subtitle menu; press H for the shortcuts). If a driver ever
+misbehaves, Settings has a CPU renderer, or set `MAWJAC_RENDERER=cpu`.
 
-Settings lists the hardware decoders your mpv reports (VA-API, NVDEC, Vulkan…),
-with a software fallback. The AppImage ships its own mpv; with a DEB/RPM or a
-source build mpv is taken from `PATH`, or from `MAWJAC_MPV=/path/to/mpv`. If no
-mpv is found, the built-in renderer is used.
+Optionally, Mawjac can hand playback to your system **mpv** (Settings, "Use
+system mpv"). It runs in its own window with your default mpv config and
+scripts, and Mawjac stays open as a remote. mpv is taken from `PATH`, from the
+path set in Settings, or from `MAWJAC_MPV=/path/to/mpv`.
 
 ## Build
 

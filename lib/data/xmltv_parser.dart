@@ -128,12 +128,7 @@ class XmltvParser {
           .map((node) => node.innerText.trim())
           .where((value) => value.isNotEmpty)
           .toList(growable: false);
-      final icon = element
-          .findAllElements('icon')
-          .map((node) => node.getAttribute('src')?.trim())
-          .whereType<String>()
-          .where((value) => value.isNotEmpty)
-          .firstOrNull;
+      final artwork = _artwork(element);
 
       byChannel.putIfAbsent(internalId, () => <Programme>[]).add(
             Programme(
@@ -144,8 +139,19 @@ class XmltvParser {
               subTitle: _optionalText(element, 'sub-title'),
               description: _optionalText(element, 'desc'),
               categories: categories,
-              iconUrl: icon,
+              iconUrl: artwork.landscape,
+              posterUrl: artwork.poster,
               episode: _episodeNumber(element),
+              credits: _credits(element),
+              date: _optionalText(element, 'date'),
+              keywords: element
+                  .findElements('keyword')
+                  .map((node) => node.innerText.trim())
+                  .where((value) => value.isNotEmpty)
+                  .toList(growable: false),
+              lengthSeconds: _lengthSeconds(element),
+              rating: _rating(element),
+              previouslyShown: element.findElements('previously-shown').isNotEmpty,
             ),
           );
     }
@@ -203,6 +209,94 @@ class XmltvParser {
     return lines.isEmpty ? '' : lines.join('\n');
   }
 
+  /// Picks artwork. `<image type="still" orient="L">` (or any landscape image)
+  /// is the best fit for the wide thumbnails; portrait posters are kept
+  /// separately for the details sheet. A plain `<icon>` counts as either.
+  static _Artwork _artwork(XmlElement element) {
+    String? still;
+    String? landscape;
+    String? poster;
+    String? other;
+    for (final node in element.childElements) {
+      final name = node.name.local;
+      if (name != 'image' && name != 'icon') {
+        continue;
+      }
+      final source = (node.getAttribute('src') ?? node.innerText).trim();
+      if (source.isEmpty) {
+        continue;
+      }
+      final type = node.getAttribute('type')?.toLowerCase() ?? '';
+      final orient = node.getAttribute('orient')?.toUpperCase() ?? '';
+      if (type == 'still') {
+        still ??= source;
+      } else if (orient == 'L') {
+        landscape ??= source;
+      } else if (type == 'poster' || orient == 'P') {
+        poster ??= source;
+      } else {
+        other ??= source;
+      }
+    }
+    final wide = still ?? landscape;
+    return _Artwork(
+      landscape: wide ?? other ?? poster,
+      poster: poster ?? (wide != null ? other : null),
+    );
+  }
+
+  static List<ProgrammeCredit> _credits(XmlElement element) {
+    final result = <ProgrammeCredit>[];
+    for (final block in element.findElements('credits')) {
+      for (final node in block.childElements) {
+        final name = node.innerText.trim();
+        if (name.isEmpty) {
+          continue;
+        }
+        final character = node.getAttribute('role')?.trim();
+        result.add(
+          ProgrammeCredit(
+            role: node.name.local,
+            name: name,
+            character:
+                character == null || character.isEmpty ? null : character,
+          ),
+        );
+      }
+    }
+    return result;
+  }
+
+  static int? _lengthSeconds(XmlElement element) {
+    for (final node in element.findElements('length')) {
+      final value = double.tryParse(node.innerText.trim());
+      if (value == null || value <= 0) {
+        continue;
+      }
+      final units = node.getAttribute('units')?.toLowerCase() ?? 'minutes';
+      final seconds = switch (units) {
+        'seconds' => value,
+        'hours' => value * 3600,
+        _ => value * 60,
+      };
+      return seconds.round();
+    }
+    return null;
+  }
+
+  static String? _rating(XmlElement element) {
+    for (final node in element.findElements('rating')) {
+      final value = node.findElements('value').firstOrNull?.innerText.trim() ??
+          node.innerText.trim();
+      if (value.isEmpty) {
+        continue;
+      }
+      final system = node.getAttribute('system')?.trim();
+      return system == null || system.isEmpty ? value : '$value ($system)';
+    }
+    return null;
+  }
+
   static String _firstText(XmlElement element, String name) {
     return _optionalText(element, name) ?? '';
   }
@@ -257,6 +351,13 @@ class XmltvParser {
     final parsed = int.tryParse(value);
     return parsed == null ? null : parsed + 1;
   }
+}
+
+class _Artwork {
+  const _Artwork({this.landscape, this.poster});
+
+  final String? landscape;
+  final String? poster;
 }
 
 class _DropStats {

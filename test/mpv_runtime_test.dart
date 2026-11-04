@@ -75,7 +75,23 @@ Note: something else, not a value.
     );
     expect(arguments, contains('--hwdec=auto-safe'));
     expect(arguments, isNot(contains('--no-config')));
+    expect(arguments, isNot(contains('--cache=yes')));
     expect(arguments.any((a) => a.startsWith('--vo=')), isFalse);
     expect(arguments, contains('--tls-verify=yes'));
+  });
+
+  test('leaves decoding to the user config by default', () {
+    final arguments = MpvRuntime.buildArguments(
+      capabilities: capabilities,
+      title: 't',
+      ipcPath: 's',
+      hwdec: 'config',
+      videoOutput: 'auto',
+      allowInsecure: false,
+      useUserConfig: true,
+      fullscreen: false,
+    );
+    expect(arguments.any((a) => a.startsWith('--hwdec=')), isFalse);
+    expect(arguments, isNot(contains('--no-config')));
   });
 }
