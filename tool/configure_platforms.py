@@ -36,7 +36,7 @@ Icon=mawjac
 Terminal=false
 Categories=AudioVideo;Video;Player;TV;
 Keywords=iptv;m3u;xmltv;tv;stream;
-StartupWMClass=mawjac
+StartupWMClass=com.mmbesar.mawjac
 """
 
 

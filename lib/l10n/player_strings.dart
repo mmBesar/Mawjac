@@ -38,6 +38,8 @@ extension PlayerStrings on AppStrings {
   String get noOtherTracks => isArabic ? 'لا يوجد مسار آخر' : 'No other track';
   String get noTracks => isArabic ? 'لا توجد مسارات في هذا البث.' : 'This stream has none.';
   String get offWord => isArabic ? 'إيقاف' : 'Off';
+  String get resetDone =>
+      isArabic ? 'تمت العودة للافتراضي' : 'Back to default';
   String get onWord => isArabic ? 'تشغيل' : 'On';
   String get preferredAudio => isArabic ? 'لغة الصوت المفضلة' : 'Preferred audio language';
   String get preferredSubtitle =>
@@ -92,6 +94,7 @@ extension PlayerStrings on AppStrings {
           ('[ ]', 'تأخير الصوت −/+ 50ms'),
           ('Z', 'تغيير نسبة العرض'),
           ('T', 'إزالة التداخل'),
+          ('R', 'إعادة النسبة وإزالة التداخل وتأخير الصوت للافتراضي'),
           ('D', 'التشخيص'),
           ('H F1', 'هذه القائمة'),
         ]
@@ -110,6 +113,7 @@ extension PlayerStrings on AppStrings {
           ('[ ]', 'Audio delay −/+ 50 ms'),
           ('Z', 'Cycle aspect ratio'),
           ('T', 'Deinterlace'),
+          ('R', 'Reset aspect, deinterlace and audio delay'),
           ('D', 'Diagnostics'),
           ('H F1', 'This sheet'),
         ];

@@ -15,7 +15,7 @@ Layout inside all packages:
 ```
 /opt/mawjac/                  Flutter bundle (mawjac, lib/, data/)
 /usr/bin/mawjac               symlink or launcher
-/usr/share/applications/mawjac.desktop
+/usr/share/applications/com.mmbesar.mawjac.desktop
 /usr/share/icons/hicolor/512x512/apps/mawjac.png
 ```
 

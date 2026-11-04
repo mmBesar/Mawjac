@@ -348,6 +348,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _lastAudioId = null;
     _lastSubtitleId = null;
     if (!auto) {
+      _resetVideoTweaks();
       _flashBanner();
     }
 
@@ -705,6 +706,30 @@ class _PlayerPageState extends State<PlayerPage> {
       strings.aspectLabel,
       strings.aspectName(next),
     );
+  }
+
+  /// Back to the defaults: automatic aspect, no deinterlace, no audio delay.
+  /// Runs on every channel change so one channel's tweaks never leak into the
+  /// next; the R key does it on demand.
+  void _resetVideoTweaks({bool announce = false}) {
+    final changed = _aspectMode != 0 || _deinterlace || _audioDelay != 0;
+    if (changed) {
+      setState(() {
+        _aspectMode = 0;
+        _deinterlace = false;
+        _audioDelay = 0;
+      });
+      unawaited(_setMpvProperty('deinterlace', 'no'));
+      unawaited(_setMpvProperty('audio-delay', '0'));
+    }
+    if (announce) {
+      final strings = context.strings;
+      _showMessage(
+        Icons.restart_alt_rounded,
+        strings.aspectLabel,
+        strings.resetDone,
+      );
+    }
   }
 
   void _toggleDeinterlace() {
@@ -1274,6 +1299,8 @@ class _PlayerPageState extends State<PlayerPage> {
           const SingleActivator(LogicalKeyboardKey.keyJ): _cycleSubtitle,
           const SingleActivator(LogicalKeyboardKey.keyZ): _cycleAspect,
           const SingleActivator(LogicalKeyboardKey.keyT): _toggleDeinterlace,
+          const SingleActivator(LogicalKeyboardKey.keyR): () =>
+              _resetVideoTweaks(announce: true),
           const SingleActivator(LogicalKeyboardKey.bracketLeft): () =>
               _nudgeAudioDelay(-0.05),
           const SingleActivator(LogicalKeyboardKey.bracketRight): () =>

@@ -80,7 +80,7 @@ fi
 
 ICON="$ROOT/assets/branding/linux/mawjac.png"
 DESKTOP="$ROOT/assets/branding/mawjac.desktop"
-METAINFO="$ROOT/packaging/linux/com.mmbesar.mawjac.metainfo.xml"
+METAINFO="$ROOT/packaging/linux/com.mmbesar.mawjac.appdata.xml"
 if [[ ! -f "$ICON" ]]; then
   echo "Missing $ICON; run tool/generate_icons.py" >&2
   exit 1
@@ -253,8 +253,8 @@ cp -a "$BUNDLE/." "$ROOTFS/opt/mawjac/"
 chmod +x "$ROOTFS/opt/mawjac/mawjac"
 ln -sfn /opt/mawjac/mawjac "$ROOTFS/usr/bin/mawjac"
 install -m644 "$ICON" "$ROOTFS/usr/share/icons/hicolor/512x512/apps/mawjac.png"
-install -m644 "$DESKTOP" "$ROOTFS/usr/share/applications/mawjac.desktop"
-install -m644 "$METAINFO" "$ROOTFS/usr/share/metainfo/com.mmbesar.mawjac.metainfo.xml"
+install -m644 "$DESKTOP" "$ROOTFS/usr/share/applications/com.mmbesar.mawjac.desktop"
+install -m644 "$METAINFO" "$ROOTFS/usr/share/metainfo/com.mmbesar.mawjac.appdata.xml"
 
 echo "Staged $(du -sh "$ROOTFS/opt/mawjac" | cut -f1) application bundle for $DEB_ARCH."
 
@@ -335,8 +335,8 @@ cp -a "$ROOTFS/." %{buildroot}/
 %files
 /opt/mawjac
 /usr/bin/mawjac
-/usr/share/applications/mawjac.desktop
-/usr/share/metainfo/com.mmbesar.mawjac.metainfo.xml
+/usr/share/applications/com.mmbesar.mawjac.desktop
+/usr/share/metainfo/com.mmbesar.mawjac.appdata.xml
 /usr/share/icons/hicolor/512x512/apps/mawjac.png
 EOF
 
@@ -365,12 +365,10 @@ build_appimage() {
 
   cp -a "$BUNDLE/." "$appdir/usr/bin/"
   install -m644 "$ICON" "$appdir/usr/share/icons/hicolor/512x512/apps/mawjac.png"
-  install -m644 "$DESKTOP" "$appdir/usr/share/applications/mawjac.desktop"
-  install -m644 "$METAINFO" "$appdir/usr/share/metainfo/com.mmbesar.mawjac.metainfo.xml"
-  # appimagetool looks for exactly <desktop-file-name>.appdata.xml.
-  install -m644 "$METAINFO" "$appdir/usr/share/metainfo/mawjac.appdata.xml"
+  install -m644 "$DESKTOP" "$appdir/usr/share/applications/com.mmbesar.mawjac.desktop"
+  install -m644 "$METAINFO" "$appdir/usr/share/metainfo/com.mmbesar.mawjac.appdata.xml"
   install -m644 "$ICON" "$appdir/mawjac.png"
-  install -m644 "$DESKTOP" "$appdir/mawjac.desktop"
+  install -m644 "$DESKTOP" "$appdir/com.mmbesar.mawjac.desktop"
   ln -sfn mawjac.png "$appdir/.DirIcon"
 
   cat > "$appdir/AppRun" <<'EOF'

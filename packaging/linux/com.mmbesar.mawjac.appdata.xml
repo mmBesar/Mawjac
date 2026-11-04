@@ -9,7 +9,7 @@
     <p>Mawjac plays live channels from M3U playlists and shows a rich programme guide from XMLTV. It works with Tunarr and ErsatzTV by just entering the server address.</p>
     <p>Arabic and English with full right-to-left support, favourites, search, a zoomable guide timeline, and several themes including AMOLED.</p>
   </description>
-  <launchable type="desktop-id">mawjac.desktop</launchable>
+  <launchable type="desktop-id">com.mmbesar.mawjac.desktop</launchable>
   <url type="homepage">https://github.com/mmBesar/Mawjac</url>
   <url type="bugtracker">https://github.com/mmBesar/Mawjac/issues</url>
   <developer id="com.mmbesar">
