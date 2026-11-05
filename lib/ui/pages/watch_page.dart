@@ -642,8 +642,8 @@ class _HeroCard extends StatelessWidget {
                     ChannelLogo(
                       channel: channel,
                       allowInsecure: allowInsecure,
-                      size: hasArt ? 40 : 56,
-                      radius: hasArt ? 12 : 16,
+                      size: 48,
+                      radius: 14,
                     ),
                     const SizedBox(width: 10),
                     Expanded(

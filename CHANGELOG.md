@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Fix build error in the Watch page hero card.
+
 ## 0.5.0
 
 - Player OSD: wider, pinnable channel banner (pin icon or click away to dismiss; seconds are set in Settings), smaller type that fits phones and still scales up on large screens, an EPG panel with rich programme details, colourful control icons, and the channel's tags and source in the banner.
