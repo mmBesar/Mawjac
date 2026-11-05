@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- Player OSD: wider, pinnable channel banner (pin icon or click away to dismiss; seconds are set in Settings), smaller type that fits phones and still scales up on large screens, an EPG panel with rich programme details, colourful control icons, and the channel's tags and source in the banner.
+- Android: touch-friendly OSD with the channel browser, and optional floating picture-in-picture player.
+- Watch page: four views (cards, list, compact, wall), bigger channel logos where there is no programme art, the play button no longer covers the logo, wheel-scrollable tag and group chips.
+- Display settings: UI scale (Ctrl +/- /0 on desktop), Guide size, OSD seconds. Desktop default scale lowered.
+- Fixes: aspect ratio, deinterlace and audio delay reset per channel and with R.
+
 ## 0.4.0
 
 - Desktop: the default player is now inside the app window and uses the GPU, with a set-top-box style on-screen display: channel banner with now/next and progress, volume panel, a channel and group browser (C or Enter), number entry, keyboard shortcuts (H), aspect ratio, deinterlace, audio delay and diagnostics. A CPU renderer is available in Settings as a fallback. The system mpv window is optional and now runs with your own default mpv config.

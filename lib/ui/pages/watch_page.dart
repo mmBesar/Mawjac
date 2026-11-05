@@ -9,12 +9,14 @@ import '../../core/platform.dart';
 import '../../core/theme.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
+import '../../l10n/player_strings.dart';
 import '../../l10n/strings.dart';
 import '../player_page.dart';
 import '../widgets/channel_art.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/channel_row.dart';
 import '../widgets/channel_tile.dart';
+import '../widgets/channel_views.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/page_search.dart';
@@ -22,6 +24,7 @@ import '../widgets/programme_hit_tile.dart';
 import '../widgets/source_switcher.dart';
 import '../widgets/warnings_panel.dart';
 import '../widgets/wave.dart';
+import '../widgets/wheel_scroll.dart';
 import 'channel_guide_page.dart';
 
 /// The home screen: what is on now, then every channel.
@@ -132,6 +135,7 @@ class _WatchPageState extends State<WatchPage> {
     final hits = searching
         ? state.searchProgrammes(_search.query)
         : const <ProgrammeHit>[];
+    final view = state.settings.channelView;
     final loadingFirst = state.isLoading && state.channels.isEmpty;
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
     final hero = state.channels.isEmpty
@@ -162,6 +166,8 @@ class _WatchPageState extends State<WatchPage> {
                       onManage: widget.onOpenSources,
                     ),
                     padding: sidePadding,
+                    view: view,
+                    onView: (value) => unawaited(state.setChannelView(value)),
                   ),
                 ),
               ),
@@ -250,7 +256,65 @@ class _WatchPageState extends State<WatchPage> {
                     body: strings.noFavoritesBody,
                   ),
                 )
-              else if (wide && kIsDesktop)
+              else if (view == 'wall')
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(sidePadding, 4, sidePadding, 120),
+                  sliver: SliverGrid.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 190,
+                      mainAxisExtent: kChannelWallHeight,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                    ),
+                    itemCount: channels.length,
+                    itemBuilder: (context, index) {
+                      final channel = channels[index];
+                      return ChannelWallTile(
+                        channel: channel,
+                        programme: state.epg.nowFor(channel, state.now),
+                        now: state.now,
+                        allowInsecure: allowInsecure,
+                        favorite: state.isFavorite(channel),
+                        onTap: () => openPlayer(context, channel),
+                        onOpenGuide: () =>
+                            ChannelGuidePage.open(context, channel),
+                        onToggleFavorite: () =>
+                            unawaited(state.toggleFavorite(channel)),
+                      );
+                    },
+                  ),
+                )
+              else if (view == 'compact')
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(sidePadding, 4, sidePadding, 120),
+                  sliver: SliverGrid.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 440,
+                      mainAxisExtent: kChannelCompactHeight,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                    ),
+                    itemCount: channels.length,
+                    itemBuilder: (context, index) {
+                      final channel = channels[index];
+                      return ChannelCompactRow(
+                        channel: channel,
+                        programme: state.epg.nowFor(channel, state.now),
+                        now: state.now,
+                        allowInsecure: allowInsecure,
+                        favorite: state.isFavorite(channel),
+                        onTap: () => openPlayer(context, channel),
+                        onOpenGuide: () =>
+                            ChannelGuidePage.open(context, channel),
+                        onToggleFavorite: () =>
+                            unawaited(state.toggleFavorite(channel)),
+                      );
+                    },
+                  ),
+                )
+              else if (wide && kIsDesktop && view == 'cards')
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(sidePadding, 4, sidePadding, 32),
                   sliver: SliverGrid.builder(
@@ -280,7 +344,7 @@ class _WatchPageState extends State<WatchPage> {
                     },
                   ),
                 )
-              else if (wide)
+              else if (wide && view == 'cards')
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(sidePadding, 4, sidePadding, 120),
                   sliver: SliverGrid.builder(
@@ -381,6 +445,8 @@ class _Header extends StatelessWidget {
     required this.onOpenSources,
     required this.padding,
     required this.search,
+    required this.view,
+    required this.onView,
   });
 
   final String sourceName;
@@ -389,6 +455,8 @@ class _Header extends StatelessWidget {
   final VoidCallback onOpenSources;
   final double padding;
   final PageSearch search;
+  final String view;
+  final void Function(String view) onView;
 
   @override
   Widget build(BuildContext context) {
@@ -432,6 +500,34 @@ class _Header extends StatelessWidget {
               ),
             ),
           PageSearchButton(search: search),
+          PopupMenuButton<String>(
+            tooltip: strings.viewMode,
+            icon: const Icon(Icons.dashboard_customize_rounded),
+            initialValue: view,
+            onSelected: onView,
+            itemBuilder: (context) => <PopupMenuEntry<String>>[
+              for (final entry in <(String, IconData, String)>[
+                ('cards', Icons.dashboard_rounded, strings.viewCards),
+                ('list', Icons.view_agenda_rounded, strings.viewList),
+                ('compact', Icons.view_list_rounded, strings.viewCompact),
+                ('wall', Icons.grid_view_rounded, strings.viewWall),
+              ])
+                PopupMenuItem<String>(
+                  value: entry.$1,
+                  child: Row(
+                    children: <Widget>[
+                      Icon(
+                        entry.$2,
+                        size: 20,
+                        color: entry.$1 == view ? colors.accent : null,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(entry.$3),
+                    ],
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             tooltip: strings.refresh,
             onPressed: loading ? null : () => unawaited(onRefresh()),
@@ -546,8 +642,8 @@ class _HeroCard extends StatelessWidget {
                     ChannelLogo(
                       channel: channel,
                       allowInsecure: allowInsecure,
-                      size: 40,
-                      radius: 12,
+                      size: hasArt ? 40 : 56,
+                      radius: hasArt ? 12 : 16,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -684,20 +780,23 @@ class _FilterBar extends StatelessWidget {
     ];
     return SizedBox(
       height: 56,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: padding, vertical: 10),
-        itemCount: entries.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final entry = entries[index];
-          return _Pill(
-            label: entry.$2,
-            selected: entry.$1 == selected,
-            star: entry.$1 == favoritesKey,
-            onTap: () => onSelected(entry.$1),
-          );
-        },
+      child: WheelScroll(
+        builder: (context, controller) => ListView.separated(
+          controller: controller,
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.symmetric(horizontal: padding, vertical: 10),
+          itemCount: entries.length,
+          separatorBuilder: (context, index) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final entry = entries[index];
+            return _Pill(
+              label: entry.$2,
+              selected: entry.$1 == selected,
+              star: entry.$1 == favoritesKey,
+              onTap: () => onSelected(entry.$1),
+            );
+          },
+        ),
       ),
     );
   }

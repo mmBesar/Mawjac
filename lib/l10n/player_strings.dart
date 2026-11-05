@@ -117,4 +117,39 @@ extension PlayerStrings on AppStrings {
           ('D', 'Diagnostics'),
           ('H F1', 'This sheet'),
         ];
+
+  String get minutesShort => isArabic ? 'د' : 'min';
+  String get noGuide => isArabic ? 'لا توجد بيانات دليل لهذه القناة' : 'No guide data for this channel';
+  String get pinOsd => isArabic ? 'تثبيت (P)' : 'Pin (P)';
+  String get pipButton => isArabic ? 'نافذة عائمة' : 'Floating window';
+  String get recordingScheduled =>
+      isArabic ? 'تمت جدولة التسجيل.' : 'Recording scheduled.';
+  String get recordingsForbidden => isArabic
+      ? 'هذا الحساب غير مسموح له بالتسجيل على الخادم.'
+      : 'This account is not allowed to record on the server.';
+  String get stbEpg => isArabic ? 'دليل القناة' : 'Channel guide';
+  String get stbEpgHint => isArabic
+      ? '↑↓ اختيار · Enter تسجيل · Esc إغلاق'
+      : '↑↓ select · Enter record · Esc close';
+  String get unpinOsd => isArabic ? 'إلغاء التثبيت (P)' : 'Unpin (P)';
+  String get viewCards => isArabic ? 'بطاقات' : 'Cards';
+  String get viewCompact => isArabic ? 'مضغوط' : 'Compact';
+  String get viewList => isArabic ? 'قائمة' : 'List';
+  String get viewMode => isArabic ? 'طريقة العرض' : 'View';
+  String get viewWall => isArabic ? 'جدار الشعارات' : 'Logo wall';
+
+  String get autoWord => isArabic ? 'تلقائي' : 'Auto';
+  String get displaySection => isArabic ? 'العرض والحجم' : 'Display & size';
+  String get guideSizeLabel => isArabic ? 'حجم الدليل' : 'Guide size';
+  String get osdSecondsLabel =>
+      isArabic ? 'مدة بقاء الشريط على الشاشة' : 'On-screen display time';
+  String get pipHelp => isArabic
+      ? 'عند الخروج من التطبيق أثناء المشاهدة يستمر الفيديو في نافذة صغيرة عائمة.'
+      : 'Leaving the app while watching keeps the video in a small floating window.';
+  String get pipLabel => isArabic ? 'نافذة عائمة عند الخروج' : 'Floating window on leave';
+  String secondsShort(int n) => isArabic ? '$n ثانية' : '$n s';
+  String get uiScaleHelp => isArabic
+      ? 'يكبّر النصوص والأيقونات في كل مكان. على سطح المكتب: Ctrl ‎+‎ و Ctrl ‎−‎ و Ctrl 0.'
+      : 'Makes text and icons bigger everywhere. On desktop: Ctrl + and Ctrl − to change, Ctrl 0 for automatic.';
+  String get uiScaleLabel => isArabic ? 'حجم الواجهة' : 'Interface size';
 }

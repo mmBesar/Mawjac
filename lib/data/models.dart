@@ -199,6 +199,15 @@ class Channel {
   final String? group;
 
   String get displayNumber => number.isEmpty ? '—' : number;
+
+  /// The playlist group split into tags: `News;Arabic` is two tags.
+  List<String> get tags => group == null
+      ? const <String>[]
+      : group!
+          .split(RegExp(r'[;|]'))
+          .map((tag) => tag.trim())
+          .where((tag) => tag.isNotEmpty)
+          .toList(growable: false);
 }
 
 /// One person credited on a programme: an actor (with the role they play),
@@ -439,6 +448,11 @@ class AppSettings {
     this.preferredSubtitleLang = 'off',
     this.rememberTracks = true,
     this.zapBanner = true,
+    this.osdSeconds = 8,
+    this.uiScale = 0,
+    this.channelView = 'cards',
+    this.pipOnLeave = true,
+    this.guideScale = 0,
   });
 
   factory AppSettings.defaults() => const AppSettings(
@@ -483,6 +497,21 @@ class AppSettings {
   /// Show the channel banner when zapping on desktop.
   final bool zapBanner;
 
+  /// Seconds an on-screen display stays before it goes away (unless pinned).
+  final int osdSeconds;
+
+  /// Whole-interface zoom; 0 picks one for the screen.
+  final double uiScale;
+
+  /// How the channel page lists channels: cards, list, compact or wall.
+  final String channelView;
+
+  /// Android: float the video in a small window when leaving the app.
+  final bool pipOnLeave;
+
+  /// Extra zoom for the Guide only; 0 picks one for the screen.
+  final double guideScale;
+
   /// Open the mpv window fullscreen.
   final bool startFullscreen;
 
@@ -514,6 +543,11 @@ class AppSettings {
     String? preferredSubtitleLang,
     bool? rememberTracks,
     bool? zapBanner,
+    int? osdSeconds,
+    double? uiScale,
+    String? channelView,
+    bool? pipOnLeave,
+    double? guideScale,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -537,6 +571,11 @@ class AppSettings {
           preferredSubtitleLang ?? this.preferredSubtitleLang,
       rememberTracks: rememberTracks ?? this.rememberTracks,
       zapBanner: zapBanner ?? this.zapBanner,
+      osdSeconds: osdSeconds ?? this.osdSeconds,
+      uiScale: uiScale ?? this.uiScale,
+      channelView: channelView ?? this.channelView,
+      pipOnLeave: pipOnLeave ?? this.pipOnLeave,
+      guideScale: guideScale ?? this.guideScale,
     );
   }
 
@@ -559,6 +598,11 @@ class AppSettings {
         'preferredSubtitleLang': preferredSubtitleLang,
         'rememberTracks': rememberTracks,
         'zapBanner': zapBanner,
+        'osdSeconds': osdSeconds,
+        'uiScale': uiScale,
+        'channelView': channelView,
+        'pipOnLeave': pipOnLeave,
+        'guideScale': guideScale,
         'settingsVersion': 2,
       };
 
@@ -604,6 +648,11 @@ class AppSettings {
           json['preferredSubtitleLang'] as String? ?? 'off',
       rememberTracks: json['rememberTracks'] as bool? ?? true,
       zapBanner: json['zapBanner'] as bool? ?? true,
+      osdSeconds: json['osdSeconds'] as int? ?? 8,
+      uiScale: (json['uiScale'] as num?)?.toDouble() ?? 0,
+      channelView: json['channelView'] as String? ?? 'cards',
+      pipOnLeave: json['pipOnLeave'] as bool? ?? true,
+      guideScale: (json['guideScale'] as num?)?.toDouble() ?? 0,
     );
   }
 }
