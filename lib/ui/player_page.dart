@@ -2062,6 +2062,7 @@ class _PlayerPageState extends State<PlayerPage> {
     final padding = immersive ? MediaQuery.paddingOf(context) : EdgeInsets.zero;
     final favorite = state.isFavorite(_channel);
     final showStrip = immersive && constraints.maxHeight >= 420;
+    final tiny = constraints.maxHeight < 260;
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
     final current = state.epg.nowFor(_channel, state.now);
 
@@ -2079,8 +2080,7 @@ class _PlayerPageState extends State<PlayerPage> {
       child: AnimatedOpacity(
         opacity: visible ? 1 : 0,
         duration: const Duration(milliseconds: 180),
-        child: Stack(
-          fit: StackFit.expand,
+        child: Column(
           children: <Widget>[
             // Top bar.
             Align(
@@ -2178,68 +2178,69 @@ class _PlayerPageState extends State<PlayerPage> {
                 ),
               ),
             ),
-            // Centre transport.
-            Center(
-              child: Row(
+            // Centre transport. It takes the space between the bars, so it can
+            // never sit on top of their buttons.
+            Expanded(
+              child: Center(
+                child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   _RoundButton(
                     tooltip: strings.previousChannel,
                     icon: Icons.skip_previous_rounded,
-                    size: 36,
+                    size: tiny ? 26 : 34,
                     onPressed: () => _zap(-1),
                   ),
-                  const SizedBox(width: 18),
+                  SizedBox(width: tiny ? 10 : 18),
                   _RoundButton(
                     tooltip: _playing ? strings.pause : strings.play,
                     icon: _playing
                         ? Icons.pause_rounded
                         : Icons.play_arrow_rounded,
-                    size: 52,
+                    size: tiny ? 36 : 48,
                     filled: true,
                     onPressed: () {
                       unawaited(_player.playOrPause());
                       _showControls();
                     },
                   ),
-                  const SizedBox(width: 18),
+                  SizedBox(width: tiny ? 10 : 18),
                   _RoundButton(
                     tooltip: strings.nextChannel,
                     icon: Icons.skip_next_rounded,
-                    size: 36,
+                    size: tiny ? 26 : 34,
                     onPressed: () => _zap(1),
                   ),
                 ],
               ),
-            ),
-            // Volume, bottom start.
-            PositionedDirectional(
-              bottom: 8 + padding.bottom + (showStrip ? 132 : 0),
-              start: 8 + padding.left,
-              child: StreamBuilder<double>(
-                stream: _player.stream.volume,
-                initialData: _player.state.volume,
-                builder: (context, snapshot) {
-                  final volume = snapshot.data ?? _player.state.volume;
-                  final muted = volume <= 0.01;
-                  return _RoundButton(
-                    tooltip: muted ? strings.unmute : strings.mute,
-                    icon: muted
-                        ? Icons.volume_off_rounded
-                        : Icons.volume_up_rounded,
-                    onPressed: _toggleMute,
-                  );
-                },
               ),
             ),
-            // Track and favourite buttons, bottom end: the top bar is too crowded on a
-            // phone held upright.
-            PositionedDirectional(
-              bottom: 8 + padding.bottom + (showStrip ? 132 : 0),
-              end: 8 + padding.right,
+            // Volume on the start side, tracks and favourite on the end side.
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                8 + padding.left,
+                0,
+                8 + padding.right,
+                showStrip ? 4 : 8 + padding.bottom,
+              ),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
+                  StreamBuilder<double>(
+                    stream: _player.stream.volume,
+                    initialData: _player.state.volume,
+                    builder: (context, snapshot) {
+                      final volume = snapshot.data ?? _player.state.volume;
+                      final muted = volume <= 0.01;
+                      return _RoundButton(
+                        tooltip: muted ? strings.unmute : strings.mute,
+                        icon: muted
+                            ? Icons.volume_off_rounded
+                            : Icons.volume_up_rounded,
+                        onPressed: _toggleMute,
+                      );
+                    },
+                  ),
+                  const Spacer(),
                   _RoundButton(
                     tooltip: strings.audioAndSubtitles,
                     icon: Icons.subtitles_rounded,
@@ -2657,76 +2658,15 @@ class _GestureOsd extends StatelessWidget {
         subtitle: subtitle,
       );
     }
-    if (kIsDesktop) {
-      return StbValueOsd(
-        icon: brightness
-            ? Icons.brightness_6_rounded
-            : (percent == 0
-                ? Icons.volume_off_rounded
-                : Icons.volume_up_rounded),
-        label: brightness ? strings.brightness : strings.volume,
-        value: value,
-      );
-    }
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.68),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(
-                  brightness
-                      ? Icons.brightness_6_rounded
-                      : (percent == 0
-                          ? Icons.volume_off_rounded
-                          : Icons.volume_up_rounded),
-                  color: Colors.white,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  brightness ? strings.brightness : strings.volume,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: 156,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: value,
-                  minHeight: 5,
-                  backgroundColor: Colors.white.withValues(alpha: 0.22),
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '$percent%',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
-              ),
-            ),
-          ],
-        ),
-      ),
+    return StbValueOsd(
+      icon: brightness
+          ? Icons.brightness_6_rounded
+          : (percent == 0
+              ? Icons.volume_off_rounded
+              : Icons.volume_up_rounded),
+      label: brightness ? strings.brightness : strings.volume,
+      value: value,
+      atStart: brightness,
     );
   }
 }

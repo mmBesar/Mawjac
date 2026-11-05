@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/bidi.dart';
+import '../../core/platform.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../l10n/player_strings.dart';
@@ -131,15 +132,62 @@ class _StbEpgPanelState extends State<StbEpgPanel> {
     final strings = context.strings;
     final colors = context.mawjColors;
     final size = MediaQuery.sizeOf(context);
-    final compact = size.width < 720;
+    final compact = !kIsDesktop || size.width < 720;
+    final sheet = compact && size.height > size.width;
+    // A short window (phone on its side): programmes and details side by
+    // side, the panel as tall as the screen.
+    final dense = size.height < 520;
+    final pad = MediaQuery.paddingOf(context);
     final programme = _current;
 
+    final list = widget.programmes.isEmpty
+        ? Center(
+            child: Text(
+              strings.noGuide,
+              style: const TextStyle(color: Colors.white60, fontSize: 15),
+            ),
+          )
+        : ListView.builder(
+            controller: _scroll,
+            itemExtent: _rowHeight,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            itemCount: widget.programmes.length,
+            itemBuilder: (context, index) {
+              final item = widget.programmes[index];
+              return _EpgRow(
+                programme: item,
+                now: widget.now,
+                use24: widget.use24,
+                selected: index == _selected,
+                onTap: () => setState(() => _selected = index),
+              );
+            },
+          );
+    final details = programme == null
+        ? const SizedBox.shrink()
+        : _Details(
+            programme: programme,
+            now: widget.now,
+            use24: widget.use24,
+          );
+
     final panel = Container(
-      width: compact ? double.infinity : 560,
-      height: compact ? size.height * 0.78 : null,
-      margin: compact
+      width: sheet
+          ? double.infinity
+          : (dense ? (size.width * 0.84).clamp(360.0, 820.0) : 560),
+      height: sheet
+          ? size.height * 0.78
+          : (dense ? size.height - 16 - pad.top - pad.bottom : null),
+      margin: sheet
           ? const EdgeInsets.fromLTRB(8, 0, 8, 8)
-          : const EdgeInsets.fromLTRB(20, 56, 20, 20),
+          : (dense
+              ? EdgeInsets.fromLTRB(
+                  8,
+                  8 + pad.top,
+                  8 + pad.right,
+                  8 + pad.bottom,
+                )
+              : const EdgeInsets.fromLTRB(20, 56, 20, 20)),
       decoration: stbPanelDecoration(colors.accent),
       child: Column(
         children: <Widget>[
@@ -188,43 +236,24 @@ class _StbEpgPanelState extends State<StbEpgPanel> {
               ],
             ),
           ),
-          Expanded(
-            flex: 5,
-            child: widget.programmes.isEmpty
-                ? Center(
-                    child: Text(
-                      strings.noGuide,
-                      style: const TextStyle(color: Colors.white60, fontSize: 15),
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scroll,
-                    itemExtent: _rowHeight,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    itemCount: widget.programmes.length,
-                    itemBuilder: (context, index) {
-                      final item = widget.programmes[index];
-                      return _EpgRow(
-                        programme: item,
-                        now: widget.now,
-                        use24: widget.use24,
-                        selected: index == _selected,
-                        onTap: () => setState(() => _selected = index),
-                      );
-                    },
+          if (dense)
+            Expanded(
+              child: Row(
+                children: <Widget>[
+                  Expanded(child: list),
+                  Container(
+                    width: 1,
+                    color: Colors.white.withValues(alpha: 0.10),
                   ),
-          ),
-          Container(height: 1, color: Colors.white.withValues(alpha: 0.10)),
-          Expanded(
-            flex: 5,
-            child: programme == null
-                ? const SizedBox.shrink()
-                : _Details(
-                    programme: programme,
-                    now: widget.now,
-                    use24: widget.use24,
-                  ),
-          ),
+                  Expanded(child: details),
+                ],
+              ),
+            )
+          else ...<Widget>[
+            Expanded(flex: 5, child: list),
+            Container(height: 1, color: Colors.white.withValues(alpha: 0.10)),
+            Expanded(flex: 5, child: details),
+          ],
           if (!compact)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
@@ -254,7 +283,7 @@ class _StbEpgPanelState extends State<StbEpgPanel> {
             ),
           ),
           Align(
-            alignment: compact
+            alignment: sheet
                 ? Alignment.bottomCenter
                 : AlignmentDirectional.centerEnd,
             child: panel,

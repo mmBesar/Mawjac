@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.3
+
+- Android player: the controls are laid out in rows (top bar, transport, bottom buttons), so the channels, EPG, audio/subtitle and favourite buttons no longer hide behind each other or the progress bar.
+- Android: the Cards view is now real cards (two or more per row); List stays the list.
+- Channel browser and EPG panel on a phone held sideways: a full-height side panel with a slim header, so many channels show at once; the EPG shows programmes and details side by side.
+- Volume, brightness and notice OSDs are compact cards at the top of the screen (brightness at the start side, volume at the end side), not in the middle.
+
 ## 0.5.2
 
 - Player info banner and EPG panel are organised in icon rows (tags, source, video, audio, decoder; date, length, rating, cast and crew). Control icons are plain white again.

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/bidi.dart';
+import '../../core/platform.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../l10n/player_strings.dart';
@@ -306,7 +307,13 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
     final size = MediaQuery.sizeOf(context);
     // Phones get a sheet from the bottom and a real search box; desktop gets
     // the side panel driven by keys.
-    final compact = size.width < 720;
+    final compact = !kIsDesktop || size.width < 720;
+    // Upright phone: a sheet from the bottom. Phone on its side or a short
+    // window: a full-height side panel with a slim header, so several
+    // channels fit at once.
+    final sheet = compact && size.height > size.width;
+    final dense = size.height < 520;
+    final pad = MediaQuery.paddingOf(context);
     return Focus(
       focusNode: _focus,
       onKeyEvent: compact ? null : _onKey,
@@ -329,18 +336,30 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
             ),
           ),
           Align(
-            alignment: compact
+            alignment: sheet
                 ? Alignment.bottomCenter
                 : AlignmentDirectional.centerStart,
             child: Container(
-              width: compact ? double.infinity : 500,
-              height: compact ? size.height * 0.78 : null,
-              margin: compact
+              width: sheet
+                  ? double.infinity
+                  : (compact ? (size.width * 0.55).clamp(300.0, 460.0) : 500),
+              height: sheet
+                  ? size.height * 0.78
+                  : (dense ? size.height - 16 - pad.top - pad.bottom : null),
+              margin: sheet
                   ? const EdgeInsets.fromLTRB(8, 0, 8, 8)
-                  : const EdgeInsets.fromLTRB(20, 56, 20, 20),
+                  : (dense
+                      ? EdgeInsets.fromLTRB(
+                          8 + pad.left,
+                          8 + pad.top,
+                          8,
+                          8 + pad.bottom,
+                        )
+                      : const EdgeInsets.fromLTRB(20, 56, 20, 20)),
               decoration: stbPanelDecoration(colors.accent),
               child: Column(
                 children: <Widget>[
+                  if (!dense)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 16, 10, 6),
                     child: Row(
@@ -375,7 +394,7 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
                     ),
                   ),
                   SizedBox(
-                    height: 42,
+                    height: dense ? 40 : 42,
                     child: WheelScroll(
                       controller: _tabScroll,
                       builder: (context, controller) => SingleChildScrollView(
@@ -400,8 +419,11 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
                     ),
                   ),
                   Container(
-                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                    margin: EdgeInsets.fromLTRB(16, dense ? 4 : 8, 16, 6),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: dense ? 6 : 9,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(12),
@@ -464,6 +486,17 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
                               color: Colors.white54,
                             ),
                           ),
+                        if (dense) ...<Widget>[
+                          const SizedBox(width: 12),
+                          InkWell(
+                            onTap: widget.onClose,
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 22,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

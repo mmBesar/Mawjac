@@ -314,16 +314,21 @@ class _WatchPageState extends State<WatchPage> {
                     },
                   ),
                 )
-              else if (wide && kIsDesktop && view == 'cards')
+              else if (view == 'cards')
                 SliverPadding(
-                  padding: EdgeInsets.fromLTRB(sidePadding, 4, sidePadding, 32),
+                  padding: EdgeInsets.fromLTRB(
+                    sidePadding,
+                    4,
+                    sidePadding,
+                    kIsDesktop ? 32 : 120,
+                  ),
                   sliver: SliverGrid.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 320,
-                      mainAxisExtent: kChannelTileHeight,
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 16,
+                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: kIsDesktop ? 320 : 240,
+                      mainAxisExtent:
+                          kIsDesktop ? kChannelTileHeight : kChannelTileHeight - 52,
+                      mainAxisSpacing: kIsDesktop ? 16 : 12,
+                      crossAxisSpacing: kIsDesktop ? 16 : 12,
                     ),
                     itemCount: channels.length,
                     itemBuilder: (context, index) {
@@ -344,7 +349,7 @@ class _WatchPageState extends State<WatchPage> {
                     },
                   ),
                 )
-              else if (wide && view == 'cards')
+              else if (wide)
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(sidePadding, 4, sidePadding, 120),
                   sliver: SliverGrid.builder(

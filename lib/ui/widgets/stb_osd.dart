@@ -28,114 +28,132 @@ BoxDecoration _panel(Color accent) => BoxDecoration(
 /// The dark glass look shared by every set-top-box panel.
 BoxDecoration stbPanelDecoration(Color accent) => _panel(accent);
 
-/// Width of an OSD panel for the space it has.
-double _panelWidth(double available, double wanted) =>
-    available <= 0 ? wanted : (available - 48).clamp(260.0, wanted).toDouble();
-
-/// Volume or brightness: icon, name, big percentage and a segmented bar.
+/// Volume or brightness: a compact card pinned near the top corner, so it
+/// never covers the picture's centre. Volume sits at the end side, brightness
+/// at the start side.
 class StbValueOsd extends StatelessWidget {
   const StbValueOsd({
     super.key,
     required this.icon,
     required this.label,
     required this.value,
+    this.atStart = false,
   });
 
   final IconData icon;
   final String label;
   final double value;
+  final bool atStart;
 
-  static const int _segments = 30;
+  static const int _segments = 20;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.mawjColors;
     final percent = (value * 100).round();
     final filled = (value * _segments).round().clamp(0, _segments);
+    final top = MediaQuery.paddingOf(context).top;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = _panelWidth(constraints.maxWidth, 640);
-        final big = width >= 520;
+        final available = constraints.maxWidth <= 0 ? 360.0 : constraints.maxWidth;
+        final width = (available - 32).clamp(170.0, 300.0).toDouble();
+        final small = width < 230;
         return Align(
-          alignment: const Alignment(0, 0.66),
-          child: Container(
-            width: width,
-            padding: EdgeInsets.fromLTRB(big ? 28 : 18, 20, big ? 28 : 18, 22),
-            decoration: _panel(colors.accent),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Container(
-                      width: big ? 56 : 44,
-                      height: big ? 56 : 44,
-                      decoration: BoxDecoration(
-                        color: colors.accent,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        icon,
-                        color: const Color(0xFF0A111E),
-                        size: big ? 30 : 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        label.toUpperCase(),
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.82),
-                          fontSize: big ? 18 : 14,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.6,
+          alignment: atStart
+              ? AlignmentDirectional.topStart
+              : AlignmentDirectional.topEnd,
+          child: Padding(
+            padding: EdgeInsetsDirectional.only(
+              top: 16 + top,
+              start: 16,
+              end: 16,
+            ),
+            child: Container(
+              width: width,
+              padding: EdgeInsets.fromLTRB(
+                small ? 10 : 14,
+                small ? 8 : 12,
+                small ? 12 : 16,
+                small ? 10 : 14,
+              ),
+              decoration: _panel(colors.accent),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Container(
+                        width: small ? 32 : 40,
+                        height: small ? 32 : 40,
+                        decoration: BoxDecoration(
+                          color: colors.accent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          icon,
+                          color: const Color(0xFF0A111E),
+                          size: small ? 19 : 24,
                         ),
                       ),
-                    ),
-                    Text(
-                      '$percent',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: big ? 52 : 38,
-                        fontWeight: FontWeight.w800,
-                        height: 1,
-                        fontFeatures: const <FontFeature>[
-                          FontFeature.tabularFigures(),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12, left: 4),
-                      child: Text(
-                        '%',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.6),
-                          fontSize: big ? 20 : 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: <Widget>[
-                    for (var i = 0; i < _segments; i++)
+                      SizedBox(width: small ? 8 : 12),
                       Expanded(
-                        child: Container(
-                          height: big ? 14 : 10,
-                          margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                          decoration: BoxDecoration(
-                            color: i < filled
-                                ? colors.accent
-                                : Colors.white.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(3),
+                        child: Text(
+                          label.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.78),
+                            fontSize: small ? 11 : 13,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.3,
                           ),
                         ),
                       ),
-                  ],
-                ),
-              ],
+                      Text(
+                        '$percent',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: small ? 24 : 30,
+                          fontWeight: FontWeight.w800,
+                          height: 1,
+                          fontFeatures: const <FontFeature>[
+                            FontFeature.tabularFigures(),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6, left: 2),
+                        child: Text(
+                          '%',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.6),
+                            fontSize: small ? 11 : 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: small ? 8 : 12),
+                  Row(
+                    children: <Widget>[
+                      for (var i = 0; i < _segments; i++)
+                        Expanded(
+                          child: Container(
+                            height: small ? 8 : 10,
+                            margin: const EdgeInsets.symmetric(horizontal: 1),
+                            decoration: BoxDecoration(
+                              color: i < filled
+                                  ? colors.accent
+                                  : Colors.white.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -144,7 +162,7 @@ class StbValueOsd extends StatelessWidget {
   }
 }
 
-/// A short notice (muted, audio track, subtitles, recording...).
+/// A short notice (muted, audio track, subtitles...), pinned at the top.
 class StbMessageOsd extends StatelessWidget {
   const StbMessageOsd({
     super.key,
@@ -160,60 +178,72 @@ class StbMessageOsd extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.mawjColors;
+    final top = MediaQuery.paddingOf(context).top;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = _panelWidth(constraints.maxWidth, 680);
+        final available = constraints.maxWidth <= 0 ? 360.0 : constraints.maxWidth;
+        final width = (available - 32).clamp(200.0, 420.0).toDouble();
+        final small = width < 300;
         return Align(
-          alignment: const Alignment(0, 0.66),
-          child: Container(
-            width: width,
-            padding: const EdgeInsets.fromLTRB(26, 22, 28, 22),
-            decoration: _panel(colors.accent),
-            child: Row(
-              children: <Widget>[
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: colors.accent,
-                    borderRadius: BorderRadius.circular(16),
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: EdgeInsets.only(top: 16 + top),
+            child: Container(
+              width: width,
+              padding: EdgeInsets.fromLTRB(
+                small ? 10 : 14,
+                small ? 8 : 12,
+                small ? 14 : 18,
+                small ? 8 : 12,
+              ),
+              decoration: _panel(colors.accent),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: small ? 36 : 46,
+                    height: small ? 36 : 46,
+                    decoration: BoxDecoration(
+                      color: colors.accent,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Icon(
+                      icon,
+                      color: const Color(0xFF0A111E),
+                      size: small ? 21 : 26,
+                    ),
                   ),
-                  child: Icon(icon, color: const Color(0xFF0A111E), size: 36),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      BidiText(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 30,
-                          fontWeight: FontWeight.w800,
+                  SizedBox(width: small ? 10 : 14),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        BidiText(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: small ? 15 : 19,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                      if (subtitle != null && subtitle!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 3),
-                          child: BidiText(
+                        if (subtitle != null && subtitle!.isNotEmpty)
+                          BidiText(
                             subtitle!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.7),
-                              fontSize: 20,
+                              color: Colors.white.withValues(alpha: 0.72),
+                              fontSize: small ? 12 : 14,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
