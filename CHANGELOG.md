@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2
+
+- Player info banner and EPG panel are organised in icon rows (tags, source, video, audio, decoder; date, length, rating, cast and crew). Control icons are plain white again.
+- Channel tiles: the hover play button sits in the bottom corner, never over the picture.
+
 ## 0.5.1
 
 - Fix build error in the Watch page hero card.

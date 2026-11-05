@@ -25,7 +25,6 @@ import '../l10n/player_strings.dart';
 import '../l10n/strings.dart';
 import 'desktop_player_page.dart';
 import 'widgets/channel_logo.dart';
-import 'widgets/osd_colors.dart';
 import 'widgets/stb_browser.dart';
 import 'widgets/stb_epg.dart';
 import 'widgets/stb_osd.dart';
@@ -1542,22 +1541,41 @@ class _PlayerPageState extends State<PlayerPage> {
     final fps = double.tryParse(props['estimated-vf-fps'] ?? '');
     final channels = props['audio-params/hr-channels'];
     final decoder = props['hwdec-current'];
-    final chips = <String>[
-      for (final tag in _channel.tags.take(4)) '#$tag',
-      if (state.activeSource != null) state.activeSource!.name,
+    final tags = _channel.tags.take(4).map((t) => '#$t').join('  ');
+    final codec = props['video-codec']?.split(' ').first.toUpperCase();
+    final video = <String>[
       if (width > 0 && height > 0) '$width×$height',
-      if (props['video-codec'] != null)
-        props['video-codec']!.split(' ').first.toUpperCase(),
+      if (codec != null && codec.isNotEmpty) codec,
       if (fps != null && fps > 0) '${fps.round()} fps',
-      if (props['audio-codec-name'] != null)
-        <String>[
-          props['audio-codec-name']!.toUpperCase(),
-          if (channels != null && channels.isNotEmpty) channels,
-        ].join(' '),
-      if (decoder != null && decoder != 'no') decoder,
-      if (props['frame-drop-count'] != null &&
-          props['frame-drop-count'] != '0')
-        '${strings.infoDropped} ${props['frame-drop-count']}',
+    ].join(' · ');
+    final audio = props['audio-codec-name'] == null
+        ? ''
+        : <String>[
+            props['audio-codec-name']!.toUpperCase(),
+            if (channels != null && channels.isNotEmpty) channels,
+          ].join(' ');
+    final dropped = props['frame-drop-count'];
+    final info = <StbInfoItem>[
+      if (tags.isNotEmpty)
+        StbInfoItem(Icons.sell_rounded, const Color(0xFFFFC857), tags),
+      if (state.activeSource != null)
+        StbInfoItem(
+          Icons.dns_rounded,
+          const Color(0xFF63B3ED),
+          state.activeSource!.name,
+        ),
+      if (video.isNotEmpty)
+        StbInfoItem(Icons.videocam_rounded, const Color(0xFF7BE0AD), video),
+      if (audio.isNotEmpty)
+        StbInfoItem(Icons.graphic_eq_rounded, const Color(0xFFB794F6), audio),
+      if (decoder != null && decoder != 'no')
+        StbInfoItem(Icons.memory_rounded, const Color(0xFF4FD1C5), decoder),
+      if (dropped != null && dropped != '0')
+        StbInfoItem(
+          Icons.warning_amber_rounded,
+          const Color(0xFFFC8181),
+          '${strings.infoDropped} $dropped',
+        ),
     ];
 
     final clock = state.now;
@@ -1580,7 +1598,7 @@ class _PlayerPageState extends State<PlayerPage> {
         nowDescription: now?.description,
         nextTitle: next?.displayTitle,
         nextRange: next == null ? null : range(next),
-        chips: chips,
+        info: info,
         pinned: _infoPinned,
         pinTooltip: _infoPinned ? strings.unpinOsd : strings.pinOsd,
         onPin: _togglePin,
@@ -1812,12 +1830,12 @@ class _PlayerPageState extends State<PlayerPage> {
       IconData data,
       String tooltip,
       VoidCallback onPressed, {
-      Color? color,
+      Color color = white,
     }) {
       return IconButton(
         tooltip: tooltip,
         onPressed: onPressed,
-        icon: Icon(data, color: color ?? osdIconColor(data)),
+        icon: Icon(data, color: color),
         iconSize: 22,
         visualDensity: VisualDensity.compact,
         splashRadius: 20,
@@ -1993,7 +2011,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                 : Icons.star_outline_rounded,
                             favorite ? strings.removeFavorite : strings.addFavorite,
                             () => unawaited(state.toggleFavorite(_channel)),
-                            color: favorite ? const Color(0xFFFFC857) : null,
+                            color: favorite ? colors.accent : white,
                           ),
                           icon(Icons.list_rounded, strings.channelListTooltip,
                               _openBrowser),
@@ -2235,7 +2253,7 @@ class _PlayerPageState extends State<PlayerPage> {
                     icon: favorite
                         ? Icons.star_rounded
                         : Icons.star_outline_rounded,
-                    color: favorite ? const Color(0xFFFFC857) : null,
+                    color: favorite ? colors.accent : Colors.white,
                     onPressed: () => unawaited(state.toggleFavorite(_channel)),
                   ),
                 ],
@@ -2720,7 +2738,7 @@ class _RoundButton extends StatelessWidget {
     required this.onPressed,
     this.size = 24,
     this.filled = false,
-    this.color,
+    this.color = Colors.white,
   });
 
   final String tooltip;
@@ -2728,7 +2746,7 @@ class _RoundButton extends StatelessWidget {
   final VoidCallback onPressed;
   final double size;
   final bool filled;
-  final Color? color;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -2741,9 +2759,7 @@ class _RoundButton extends StatelessWidget {
         tooltip: tooltip,
         onPressed: onPressed,
         iconSize: size,
-        color: filled
-            ? Theme.of(context).colorScheme.onPrimary
-            : (color ?? osdIconColor(icon)),
+        color: filled ? Theme.of(context).colorScheme.onPrimary : color,
         icon: Icon(icon),
       ),
     );

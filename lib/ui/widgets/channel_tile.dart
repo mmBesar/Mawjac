@@ -130,31 +130,26 @@ class _ChannelTileState extends State<ChannelTile> {
                             radius: 10,
                           ),
                         ),
-                      // With artwork the play button sits in the middle; without
-                      // it the logo is the picture, so the button moves to the
-                      // corner instead of covering it.
-                      Align(
-                        alignment: hasArt
-                            ? Alignment.center
-                            : AlignmentDirectional.bottomEnd,
+                      // The play button sits in the bottom corner so it never
+                      // covers the picture or the logo.
+                      PositionedDirectional(
+                        end: 10,
+                        bottom: 10,
                         child: AnimatedOpacity(
                           opacity: _hover ? 1 : 0,
                           duration: const Duration(milliseconds: 140),
-                          child: Padding(
-                            padding: EdgeInsets.all(hasArt ? 0 : 10),
-                            child: DecoratedBox(
+                          child: DecoratedBox(
                             decoration: BoxDecoration(
                               color: colors.accent,
                               shape: BoxShape.circle,
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.all(10),
+                              padding: const EdgeInsets.all(8),
                               child: Icon(
                                 Icons.play_arrow_rounded,
-                                size: 30,
+                                size: 26,
                                 color: theme.colorScheme.onPrimary,
                               ),
-                            ),
                             ),
                           ),
                         ),
