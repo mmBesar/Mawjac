@@ -222,6 +222,15 @@ class StbMessageOsd extends StatelessWidget {
   }
 }
 
+/// One row of the banner's info column: an icon, a colour and a text.
+class StbInfoItem {
+  const StbInfoItem(this.icon, this.color, this.text);
+
+  final IconData icon;
+  final Color color;
+  final String text;
+}
+
 /// What the channel banner shows.
 class StbBannerData {
   const StbBannerData({
@@ -241,7 +250,7 @@ class StbBannerData {
     this.nowDescription,
     this.nextTitle,
     this.nextRange,
-    this.chips = const <String>[],
+    this.info = const <StbInfoItem>[],
     this.signal,
     this.recording = false,
     this.bottomInset = 96,
@@ -264,8 +273,8 @@ class StbBannerData {
   final String? nextTitle;
   final String? nextRange;
 
-  /// Stream facts: `1920×1080`, `H264`, `AC3 5.1`...
-  final List<String> chips;
+  /// Channel and stream facts, one icon row each.
+  final List<StbInfoItem> info;
 
   /// A signal meter, when the account can see tuner status.
   final Widget? signal;
@@ -308,13 +317,36 @@ class StbBanner extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Wrap(
-              spacing: f(8),
-              runSpacing: f(8),
-              children: <Widget>[
-                for (final chip in data.chips) _Chip(text: chip, scale: k),
-              ],
-            ),
+            for (final item in data.info)
+              Padding(
+                padding: EdgeInsets.only(bottom: f(7)),
+                child: Row(
+                  children: <Widget>[
+                    Container(
+                      width: f(30),
+                      height: f(30),
+                      decoration: BoxDecoration(
+                        color: item.color.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(f(9)),
+                      ),
+                      child: Icon(item.icon, color: item.color, size: f(19)),
+                    ),
+                    SizedBox(width: f(10)),
+                    Expanded(
+                      child: BidiText(
+                        item.text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: f(18),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (data.signal != null) ...<Widget>[
               SizedBox(height: f(16)),
               data.signal!,
@@ -561,33 +593,6 @@ class StbBanner extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({required this.text, this.scale = 1});
-
-  final String text;
-  final double scale;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 6 * scale),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(10 * scale),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 17 * scale,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
     );
   }
 }

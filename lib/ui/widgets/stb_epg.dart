@@ -418,15 +418,13 @@ class _Details extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 6),
-          Text(
-            '${strings.formatDate(programme.start)} · '
-            '${strings.formatRange(programme.start, programme.stop, use24HourTime: use24)}'
-            ' · $minutes ${strings.minutesShort}',
-            style: TextStyle(
-              color: colors.accent,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w700,
-            ),
+          _IconLine(
+            icon: Icons.schedule_rounded,
+            color: colors.accent,
+            text: '${strings.formatDate(programme.start)} · '
+                '${strings.formatRange(programme.start, programme.stop, use24HourTime: use24)}'
+                ' · $minutes ${strings.minutesShort}',
+            bold: true,
           ),
           if (badges.isNotEmpty) ...<Widget>[
             const SizedBox(height: 8),
@@ -467,12 +465,33 @@ class _Details extends StatelessWidget {
           ],
           if (facts.isNotEmpty) ...<Widget>[
             const SizedBox(height: 10),
-            BidiText(
-              facts.join(' · '),
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 12.5,
-              ),
+            Wrap(
+              spacing: 14,
+              runSpacing: 6,
+              children: <Widget>[
+                if (programme.date != null)
+                  _IconLine(
+                    icon: Icons.event_rounded,
+                    color: const Color(0xFFFFC857),
+                    text: programme.date!,
+                    expand: false,
+                  ),
+                if (programme.lengthSeconds != null)
+                  _IconLine(
+                    icon: Icons.timer_outlined,
+                    color: const Color(0xFF7BE0AD),
+                    text: strings
+                        .lengthMinutes((programme.lengthSeconds! / 60).round()),
+                    expand: false,
+                  ),
+                if (programme.rating != null)
+                  _IconLine(
+                    icon: Icons.shield_outlined,
+                    color: const Color(0xFFFC8181),
+                    text: programme.rating!,
+                    expand: false,
+                  ),
+              ],
             ),
           ],
           for (final role in const <String>[
@@ -484,18 +503,84 @@ class _Details extends StatelessWidget {
           ])
             if (programme.creditsOf(role).isNotEmpty) ...<Widget>[
               const SizedBox(height: 6),
-              BidiText(
-                '${strings.creditRole(role)}: '
-                '${programme.creditsOf(role).map((c) => c.character == null ? c.name : '${c.name} (${c.character})').join(' · ')}',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
-                  fontSize: 12.5,
-                  height: 1.4,
-                ),
+              _IconLine(
+                icon: _roleIcon(role),
+                color: _roleColor(role),
+                text: '${strings.creditRole(role)}: '
+                    '${programme.creditsOf(role).map((c) => c.character == null ? c.name : '${c.name} (${c.character})').join(' · ')}',
               ),
             ],
         ],
       ),
+    );
+  }
+}
+
+IconData _roleIcon(String role) {
+  switch (role) {
+    case 'director':
+      return Icons.movie_creation_outlined;
+    case 'writer':
+      return Icons.edit_note_rounded;
+    case 'presenter':
+      return Icons.mic_none_rounded;
+    case 'guest':
+      return Icons.person_outline_rounded;
+    default:
+      return Icons.theater_comedy_outlined;
+  }
+}
+
+Color _roleColor(String role) {
+  switch (role) {
+    case 'director':
+      return const Color(0xFFFF9F6B);
+    case 'writer':
+      return const Color(0xFF63B3ED);
+    case 'presenter':
+      return const Color(0xFF4FD1C5);
+    case 'guest':
+      return const Color(0xFFB794F6);
+    default:
+      return const Color(0xFFF687B3);
+  }
+}
+
+/// A line of text led by a small coloured icon.
+class _IconLine extends StatelessWidget {
+  const _IconLine({
+    required this.icon,
+    required this.color,
+    required this.text,
+    this.bold = false,
+    this.expand = true,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String text;
+  final bool bold;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = BidiText(
+      text,
+      style: TextStyle(
+        color: bold ? color : Colors.white.withValues(alpha: 0.78),
+        fontSize: bold ? 13.5 : 13,
+        fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+        height: 1.35,
+      ),
+    );
+    return Row(
+      mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Icon(icon, color: color, size: 17),
+        const SizedBox(width: 7),
+        if (expand) Expanded(child: label) else Flexible(child: label),
+      ],
     );
   }
 }
