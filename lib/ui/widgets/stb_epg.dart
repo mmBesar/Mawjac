@@ -187,7 +187,7 @@ class _StbEpgPanelState extends State<StbEpgPanel> {
                   8 + pad.right,
                   8 + pad.bottom,
                 )
-              : const EdgeInsets.fromLTRB(20, 56, 20, 20)),
+              : const EdgeInsets.fromLTRB(20, 56, 20, 110)),
       decoration: stbPanelDecoration(colors.accent),
       child: Column(
         children: <Widget>[
@@ -404,7 +404,7 @@ class _Details extends StatelessWidget {
   List<String> _facts(AppStrings strings) {
     final length = programme.lengthSeconds;
     return <String>[
-      if (programme.date != null) programme.date!,
+      if (programme.displayDate != null) programme.displayDate!,
       if (length != null) strings.lengthMinutes((length / 60).round()),
       if (programme.rating != null) programme.rating!,
     ];
@@ -498,11 +498,11 @@ class _Details extends StatelessWidget {
               spacing: 14,
               runSpacing: 6,
               children: <Widget>[
-                if (programme.date != null)
+                if (programme.displayDate != null)
                   _IconLine(
                     icon: Icons.event_rounded,
                     color: const Color(0xFFFFC857),
-                    text: programme.date!,
+                    text: programme.displayDate!,
                     expand: false,
                   ),
                 if (programme.lengthSeconds != null)

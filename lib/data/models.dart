@@ -291,6 +291,21 @@ class Programme {
   final String? posterUrl;
   final bool previouslyShown;
 
+  /// The XMLTV `<date>` made readable: `19790707210000 +0000` -> `1979-07-07`.
+  String? get displayDate {
+    final raw = date?.trim();
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    final match = RegExp(r'^(\d{4})(\d{2})?(\d{2})?\d*(\s.*)?$').firstMatch(raw);
+    if (match == null) {
+      return raw;
+    }
+    return <String?>[match.group(1), match.group(2), match.group(3)]
+        .whereType<String>()
+        .join('-');
+  }
+
   /// Episode number and sub-title for one line of text, e.g.
   /// `S01E05 · The Cat Concerto`. Either half may be missing.
   String? get subtitleLine {

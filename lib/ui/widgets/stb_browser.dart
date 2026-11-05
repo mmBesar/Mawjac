@@ -355,7 +355,7 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
                           8,
                           8 + pad.bottom,
                         )
-                      : const EdgeInsets.fromLTRB(20, 56, 20, 20)),
+                      : const EdgeInsets.fromLTRB(20, 56, 20, 110)),
               decoration: stbPanelDecoration(colors.accent),
               child: Column(
                 children: <Widget>[

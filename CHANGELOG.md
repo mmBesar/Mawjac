@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.4
+
+- Desktop: the channel list and EPG panels sit higher so they no longer cover the bottom control bar.
+- Volume and brightness are back in the lower third of the picture.
+- EPG: dates such as `19790707210000 +0000` now read `1979-07-07`.
+- Android, small player: the channel list and EPG open over the whole page and are fully touchable; swiping on them no longer changes volume or brightness.
+
 ## 0.5.3
 
 - Android player: the controls are laid out in rows (top bar, transport, bottom buttons), so the channels, EPG, audio/subtitle and favourite buttons no longer hide behind each other or the progress bar.

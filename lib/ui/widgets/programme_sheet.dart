@@ -39,7 +39,7 @@ class _ProgrammeSheet extends StatelessWidget {
   List<String> _facts(AppStrings strings) {
     final length = programme.lengthSeconds;
     return <String>[
-      if (programme.date != null) programme.date!,
+      if (programme.displayDate != null) programme.displayDate!,
       if (length != null) strings.lengthMinutes((length / 60).round()),
       if (programme.rating != null) programme.rating!,
       if (programme.previouslyShown) strings.repeatShowing,

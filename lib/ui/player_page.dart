@@ -177,6 +177,7 @@ class _PlayerPageState extends State<PlayerPage> {
   String? _osdTitle;
   String? _osdSubtitle;
   bool _browserOpen = false;
+  bool _gestureBlocked = false;
   String? _browserGroup;
   bool _helpOpen = false;
   bool _epgOpen = false;
@@ -604,6 +605,11 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _startGesture(Offset position, double width) {
+    if (_browserOpen || _epgOpen) {
+      _gestureBlocked = true;
+      return;
+    }
+    _gestureBlocked = false;
     _adjustingBrightness = position.dx < width / 2;
     _showOsd(
       _adjustingBrightness ? _OsdKind.brightness : _OsdKind.volume,
@@ -612,6 +618,9 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _updateGesture(DragUpdateDetails details, double height) {
+    if (_gestureBlocked) {
+      return;
+    }
     final delta = -(details.primaryDelta ?? 0) / (height * 0.55);
     if (_adjustingBrightness) {
       final next = (_brightness + delta).clamp(0.05, 1.0).toDouble();
@@ -1492,12 +1501,15 @@ class _PlayerPageState extends State<PlayerPage> {
 
         return Scaffold(
           backgroundColor: colors.base,
-          body: SafeArea(
+          body: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              SafeArea(
             child: Column(
               children: <Widget>[
                 AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: _videoLayer(state, immersive: false),
+                  child: _videoLayer(state, immersive: false, withPanels: false),
                 ),
                 Expanded(child: PlayerInfoPanel(channel: _channel)),
                 PlayerChannelStrip(
@@ -1510,6 +1522,9 @@ class _PlayerPageState extends State<PlayerPage> {
                 const SizedBox(height: 8),
               ],
             ),
+          ),
+              ..._panels(state),
+            ],
           ),
         );
       },
@@ -1607,7 +1622,49 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  Widget _videoLayer(AppState state, {required bool immersive}) {
+  /// The channel browser and the EPG panel. In a small portrait player they
+  /// are drawn over the whole page, not just over the video.
+  List<Widget> _panels(AppState state) {
+    return <Widget>[
+      if (_browserOpen)
+        StbChannelBrowser(
+          channels: state.channels,
+          favorites: state.favorites,
+          groups: state.groups,
+          initialGroup: _browserGroup,
+          current: _channel,
+          now: state.now,
+          nowFor: (channel) => state.epg.nowFor(channel, state.now),
+          allowInsecure:
+              state.activeSource?.allowInsecureCerts ?? false,
+          onTune: _tuneFromBrowser,
+          onGroupChanged: (group) => _browserGroup = group,
+          onClose: _closeBrowser,
+        ),
+      if (_epgOpen)
+        StbEpgPanel(
+          channel: _channel,
+          programmes: <Programme>[
+            for (final programme in state.epg.programmesFor(_channel))
+              if (programme.stop.isAfter(
+                state.now.subtract(const Duration(minutes: 30)),
+              ))
+                programme,
+          ],
+          now: state.now,
+          use24: state.settings.use24HourTime,
+          allowInsecure:
+              state.activeSource?.allowInsecureCerts ?? false,
+          onClose: _closeEpg,
+        ),
+    ];
+  }
+
+  Widget _videoLayer(
+    AppState state, {
+    required bool immersive,
+    bool withPanels = true,
+  }) {
     final strings = context.strings;
     final colors = context.mawjColors;
     final problem = _error != null || _stalled;
@@ -1685,37 +1742,7 @@ class _PlayerPageState extends State<PlayerPage> {
                 _buildControls(state, immersive: immersive, constraints: constraints),
                 if (_infoVisible && _osdKind == null && !_browserOpen && !_epgOpen)
                   _infoBanner(state),
-                if (_browserOpen)
-                  StbChannelBrowser(
-                    channels: state.channels,
-                    favorites: state.favorites,
-                    groups: state.groups,
-                    initialGroup: _browserGroup,
-                    current: _channel,
-                    now: state.now,
-                    nowFor: (channel) => state.epg.nowFor(channel, state.now),
-                    allowInsecure:
-                        state.activeSource?.allowInsecureCerts ?? false,
-                    onTune: _tuneFromBrowser,
-                    onGroupChanged: (group) => _browserGroup = group,
-                    onClose: _closeBrowser,
-                  ),
-                if (_epgOpen)
-                  StbEpgPanel(
-                    channel: _channel,
-                    programmes: <Programme>[
-                      for (final programme in state.epg.programmesFor(_channel))
-                        if (programme.stop.isAfter(
-                          state.now.subtract(const Duration(minutes: 30)),
-                        ))
-                          programme,
-                    ],
-                    now: state.now,
-                    use24: state.settings.use24HourTime,
-                    allowInsecure:
-                        state.activeSource?.allowInsecureCerts ?? false,
-                    onClose: _closeEpg,
-                  ),
+                if (withPanels) ..._panels(state),
                 if (_helpOpen) StbHelpOverlay(onClose: _toggleHelp),
                 if (_osdKind != null)
                   IgnorePointer(
@@ -2666,7 +2693,6 @@ class _GestureOsd extends StatelessWidget {
               : Icons.volume_up_rounded),
       label: brightness ? strings.brightness : strings.volume,
       value: value,
-      atStart: brightness,
     );
   }
 }

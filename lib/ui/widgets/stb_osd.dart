@@ -28,22 +28,18 @@ BoxDecoration _panel(Color accent) => BoxDecoration(
 /// The dark glass look shared by every set-top-box panel.
 BoxDecoration stbPanelDecoration(Color accent) => _panel(accent);
 
-/// Volume or brightness: a compact card pinned near the top corner, so it
-/// never covers the picture's centre. Volume sits at the end side, brightness
-/// at the start side.
+/// Volume or brightness: a card in the lower third of the picture.
 class StbValueOsd extends StatelessWidget {
   const StbValueOsd({
     super.key,
     required this.icon,
     required this.label,
     required this.value,
-    this.atStart = false,
   });
 
   final IconData icon;
   final String label;
   final double value;
-  final bool atStart;
 
   static const int _segments = 20;
 
@@ -52,22 +48,15 @@ class StbValueOsd extends StatelessWidget {
     final colors = context.mawjColors;
     final percent = (value * 100).round();
     final filled = (value * _segments).round().clamp(0, _segments);
-    final top = MediaQuery.paddingOf(context).top;
     return LayoutBuilder(
       builder: (context, constraints) {
         final available = constraints.maxWidth <= 0 ? 360.0 : constraints.maxWidth;
-        final width = (available - 32).clamp(170.0, 300.0).toDouble();
-        final small = width < 230;
+        final width = (available - 32).clamp(190.0, 420.0).toDouble();
+        final small = width < 260;
         return Align(
-          alignment: atStart
-              ? AlignmentDirectional.topStart
-              : AlignmentDirectional.topEnd,
+          alignment: const Alignment(0, 0.66),
           child: Padding(
-            padding: EdgeInsetsDirectional.only(
-              top: 16 + top,
-              start: 16,
-              end: 16,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Container(
               width: width,
               padding: EdgeInsets.fromLTRB(
@@ -113,7 +102,7 @@ class StbValueOsd extends StatelessWidget {
                         '$percent',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: small ? 24 : 30,
+                          fontSize: small ? 26 : 36,
                           fontWeight: FontWeight.w800,
                           height: 1,
                           fontFeatures: const <FontFeature>[
