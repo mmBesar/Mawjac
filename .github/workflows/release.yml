@@ -4,10 +4,13 @@ name: Release
 # passed. Nothing is rebuilt: the APK was signed with the release key during
 # that build, so this only checks it, adds checksums and creates the release.
 #
-# Run it from Actions -> Release -> Run workflow, after the Build run for the
-# commit you want to ship has finished green.
+# Two ways to start it, after the Build run for the commit has finished green:
+#   * git tag v0.5.4 && git push origin v0.5.4   (publishes that commit's build)
+#   * Actions -> Release -> Run workflow, or: gh workflow run release.yml
 
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       run_id:
@@ -40,6 +43,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ inputs.run_id }}
         run: |
+          if [ -z "$RUN_ID" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml \
+              --commit "$GITHUB_SHA" --status success --limit 1 \
+              --json databaseId --jq '.[0].databaseId')"
+            if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+              echo "::error::Commit $GITHUB_SHA has no successful Build run. Push it to main and wait for the build, then run Release again."
+              exit 1
+            fi
+          fi
           if [ -z "$RUN_ID" ]; then
             RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml \
               --branch main --status success --limit 1 \
@@ -85,6 +97,9 @@ jobs:
         env:
           TAG: ${{ inputs.tag }}
         run: |
+          if [ -z "$TAG" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          fi
           if [ -z "$TAG" ]; then
             apk="$(ls release/Mawjac-*-arm64-v8a.apk)"
             version="$(basename "$apk" | sed 's/^Mawjac-\(.*\)-arm64-v8a\.apk$/\1/')"
@@ -108,7 +123,8 @@ jobs:
           PRERELEASE: ${{ inputs.prerelease }}
         run: |
           flags=()
-          [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
+          # Tag pushes have no inputs; a pre-release is the safe default.
+          if [ "$PRERELEASE" != "false" ]; then flags+=(--prerelease); fi
           gh release create "$TAG" release/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$SHA" \

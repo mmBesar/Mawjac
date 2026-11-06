@@ -180,10 +180,17 @@ To cut a release:
 2. Add a `CHANGELOG.md` entry.
 3. Commit and push to `main`, and wait for the Build run to go green. With the
    signing secrets set, that run already produces the release-signed APK.
-4. In GitHub: Actions -> Release -> Run workflow. Leave the fields empty to
-   publish the latest green build on `main` (the tag is `v` plus the version),
-   or give a run id and tag. The workflow downloads that run's artifacts,
-   refuses a debug-signed APK, adds `SHA256SUMS` and creates the release.
+4. Publish, either way:
+   - From git: `git tag v0.5.4 && git push origin v0.5.4`. The Release workflow
+     finds the green Build run for that exact commit and publishes it. If the
+     commit has no green build it stops with an error; it never rebuilds.
+   - From GitHub: Actions -> Release -> Run workflow (or
+     `gh workflow run release.yml`). Empty fields publish the latest green
+     build on `main`; or give a run id and tag.
+
+   Either way it refuses a debug-signed APK, adds `SHA256SUMS` and creates a
+   pre-release (untick the box in the web form for a normal release, or edit it
+   on the Releases page afterwards).
 
 ### Signing the Android APK
 
