@@ -66,7 +66,7 @@ Details and examples are in [docs/SOURCES.md](docs/SOURCES.md).
 Builds come from GitHub Actions: an Android arm64 APK and Linux amd64 and arm64
 packages (AppImage, DEB and RPM). Download them from the artifacts of a
 [Build run](https://github.com/mmBesar/Mawjac/actions/workflows/build.yml), or from
-[Releases](https://github.com/mmBesar/Mawjac/releases) when a version is tagged.
+[Releases](https://github.com/mmBesar/Mawjac/releases) once a version is published.
 
 ## Desktop playback
 

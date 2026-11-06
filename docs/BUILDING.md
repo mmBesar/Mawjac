@@ -158,8 +158,9 @@ FUSE.
 
 ## Continuous integration
 
-`.github/workflows/build.yml` runs on pushes to `main`, pull requests, tags
-matching `v*`, and manual dispatches.
+`.github/workflows/build.yml` runs on pushes to `main`, pull requests and
+manual dispatches. `.github/workflows/release.yml` publishes a release from an
+existing green build, without rebuilding.
 
 | Job | Runner | Output |
 | --- | --- | --- |
@@ -167,20 +168,22 @@ matching `v*`, and manual dispatches.
 | `android` | `ubuntu-24.04` | ARM64 release APK artifact |
 | `linux-amd64` | `ubuntu-24.04` | DEB, RPM, AppImage |
 | `linux-arm64` | `ubuntu-24.04-arm` | DEB, RPM, AppImage |
-| `release` | `ubuntu-24.04` | GitHub release + `SHA256SUMS` on tags |
 
 The ARM64 runner is free only for **public** repositories. The workflow checks
 `github.event.repository.private` and skips the ARM64 leg on private
-repositories, so a private fork still builds the x86_64 packages. Tag releases
-are published only for tags pushed to the canonical repository.
+repositories, so a private fork still builds the x86_64 packages.
 
 To cut a release:
 
 1. Update the version in `pubspec.yaml` and `lib/core/app_info.dart`
    (`kAppVersion`); they must match.
 2. Add a `CHANGELOG.md` entry.
-3. Commit and tag: `git tag v0.1.0 && git push origin main v0.1.0`.
-4. The `release` job publishes the platform artifacts and checksums.
+3. Commit and push to `main`, and wait for the Build run to go green. With the
+   signing secrets set, that run already produces the release-signed APK.
+4. In GitHub: Actions -> Release -> Run workflow. Leave the fields empty to
+   publish the latest green build on `main` (the tag is `v` plus the version),
+   or give a run id and tag. The workflow downloads that run's artifacts,
+   refuses a debug-signed APK, adds `SHA256SUMS` and creates the release.
 
 ### Signing the Android APK
 

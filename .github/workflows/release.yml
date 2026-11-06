@@ -1,0 +1,117 @@
+name: Release
+
+# Publishes a GitHub release from the artifacts of a Build run that already
+# passed. Nothing is rebuilt: the APK was signed with the release key during
+# that build, so this only checks it, adds checksums and creates the release.
+#
+# Run it from Actions -> Release -> Run workflow, after the Build run for the
+# commit you want to ship has finished green.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Build run id to publish (empty: latest successful run on main)"
+        required: false
+        type: string
+      tag:
+        description: "Release tag (empty: v + the version in the APK file name)"
+        required: false
+        type: string
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Find the build run
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml \
+              --branch main --status success --limit 1 \
+              --json databaseId --jq '.[0].databaseId')"
+          fi
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "::error::No successful Build run found on main."
+            exit 1
+          fi
+          sha="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json headSha,conclusion \
+            --jq 'select(.conclusion == "success") | .headSha')"
+          if [ -z "$sha" ]; then
+            echo "::error::Build run $RUN_ID did not succeed."
+            exit 1
+          fi
+          echo "id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Publishing run $RUN_ID at $sha"
+
+      - name: Download the build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dl release
+          gh run download "${{ steps.run.outputs.id }}" --repo "$GITHUB_REPOSITORY" --dir dl
+          find dl -type f -exec mv -t release {} +
+          ls -l release
+
+      - name: Check the files
+        run: |
+          shopt -s nullglob
+          apks=(release/Mawjac-*-arm64-v8a.apk)
+          [ ${#apks[@]} -eq 1 ] || { echo "::error::Expected exactly one APK."; exit 1; }
+          appimages=(release/Mawjac-*.AppImage)
+          [ ${#appimages[@]} -ge 1 ] || { echo "::error::No AppImage found."; exit 1; }
+          if keytool -printcert -jarfile "${apks[0]}" | grep -q "Android Debug"; then
+            echo "::error::The APK is signed with the debug key. Set the signing secrets and rebuild."
+            exit 1
+          fi
+
+      - name: Work out the tag
+        id: tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ -z "$TAG" ]; then
+            apk="$(ls release/Mawjac-*-arm64-v8a.apk)"
+            version="$(basename "$apk" | sed 's/^Mawjac-\(.*\)-arm64-v8a\.apk$/\1/')"
+            TAG="v$version"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Tag: $TAG"
+
+      - name: Write checksums
+        run: |
+          cd release
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\n' \
+            | sort | xargs -r sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          SHA: ${{ steps.run.outputs.sha }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          flags=()
+          [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
+          gh release create "$TAG" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SHA" \
+            --title "Mawjac $TAG" \
+            --generate-notes \
+            "${flags[@]}"
