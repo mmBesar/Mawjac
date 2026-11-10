@@ -23,8 +23,18 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell>
+    with SingleTickerProviderStateMixin {
   int _index = 0;
+  // True while a tab change is animating, so stray scroll reports from pages
+  // that are still building cannot move the page view.
+  bool _navigating = false;
+  int _navToken = 0;
+  late final AnimationController _fade = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 160),
+    value: 1,
+  );
   // One request counter per searchable page (Watch, Favorites, Guide).
   final List<ValueNotifier<int>> _searchRequests = <ValueNotifier<int>>[
     ValueNotifier<int>(0),
@@ -50,19 +60,48 @@ class _AppShellState extends State<AppShell> {
       notifier.dispose();
     }
     _pageController.dispose();
+    _fade.dispose();
     super.dispose();
   }
 
-  void _goTo(int index) {
-    setState(() => _index = index);
-    if (!kIsDesktop && _pageController.hasClients) {
-      unawaited(
-        _pageController.animateToPage(
-          index,
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOutCubic,
-        ),
+  /// Switches tab. Neighbouring tabs slide; a tab further away fades out,
+  /// jumps and fades in, so the pages in between are never built or shown.
+  Future<void> _goTo(int index) async {
+    if (index == _index) {
+      return;
+    }
+    final token = ++_navToken;
+    final distance = (index - _index).abs();
+    final paged = !kIsDesktop && _pageController.hasClients;
+    _navigating = true;
+    if (paged && distance == 1) {
+      setState(() => _index = index);
+      await _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
       );
+    } else {
+      await _fade.animateTo(
+        0,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeIn,
+      );
+      if (!mounted || token != _navToken) {
+        return;
+      }
+      setState(() => _index = index);
+      if (paged) {
+        _pageController.jumpToPage(index);
+      }
+      await _fade.animateTo(
+        1,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+      );
+    }
+    if (mounted && token == _navToken) {
+      _navigating = false;
     }
   }
 
@@ -76,7 +115,7 @@ class _AppShellState extends State<AppShell> {
   /// The guide's timeline reports drags past its ends; they move the page
   /// view, so one swipe scrolls the timeline and, at its edge, changes page.
   void _edgeDrag(double overscroll) {
-    if (!_pageController.hasClients) {
+    if (_navigating || !_pageController.hasClients) {
       return;
     }
     final rtl = Directionality.of(context) == TextDirection.rtl;
@@ -88,7 +127,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _edgeDragEnd() {
-    if (!_pageController.hasClients) {
+    if (_navigating || !_pageController.hasClients) {
       return;
     }
     final page = _pageController.page;
@@ -126,7 +165,7 @@ class _AppShellState extends State<AppShell> {
     ];
     final tab = tabs.indexOf(key);
     if (tab >= 0) {
-      _goTo(tab);
+      unawaited(_goTo(tab));
       return true;
     }
     if (key == LogicalKeyboardKey.keyF || key == LogicalKeyboardKey.keyK) {
@@ -206,21 +245,30 @@ class _AppShellState extends State<AppShell> {
             ),
           ),
         ),
-        if (kIsDesktop)
-          IndexedStack(index: _index, children: pages)
-        else
-          PageView(
-            controller: _pageController,
-            physics: const ClampingScrollPhysics(),
-            onPageChanged: (index) {
-              if (index != _index) {
-                setState(() => _index = index);
-              }
-            },
-            children: <Widget>[
-              for (final page in pages) _KeepAlive(child: page),
-            ],
+        AnimatedBuilder(
+          animation: _fade,
+          builder: (context, child) => Opacity(
+            opacity: _fade.value,
+            child: Transform.translate(
+              offset: Offset(0, 14 * (1 - _fade.value)),
+              child: child,
+            ),
           ),
+          child: kIsDesktop
+              ? IndexedStack(index: _index, children: pages)
+              : PageView(
+                  controller: _pageController,
+                  physics: const ClampingScrollPhysics(),
+                  onPageChanged: (index) {
+                    if (!_navigating && index != _index) {
+                      setState(() => _index = index);
+                    }
+                  },
+                  children: <Widget>[
+                    for (final page in pages) _KeepAlive(child: page),
+                  ],
+                ),
+        ),
       ],
     );
 
@@ -236,7 +284,7 @@ class _AppShellState extends State<AppShell> {
                   labels: labels,
                   icons: icons,
                   selected: _index,
-                  onSelected: _goTo,
+                  onSelected: (index) => unawaited(_goTo(index)),
                   onOpenSources: _openSources,
                 ),
                 Expanded(child: content),
@@ -258,7 +306,7 @@ class _AppShellState extends State<AppShell> {
                     labels: labels,
                     icons: icons,
                     selected: _index,
-                    onSelected: _goTo,
+                    onSelected: (index) => unawaited(_goTo(index)),
                   ),
                 ),
               ),

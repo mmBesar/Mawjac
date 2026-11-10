@@ -184,6 +184,19 @@ class SettingsPage extends StatelessWidget {
                               ),
                         ),
                       ),
+                    SwitchListTile(
+                      value: settings.guideThumbnails,
+                      onChanged: (value) =>
+                          unawaited(state.setGuideThumbnails(value)),
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(strings.guideThumbsLabel),
+                      subtitle: Text(
+                        strings.guideThumbsHelp,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colors.subtext0,
+                            ),
+                      ),
+                    ),
                   ],
                 ),
                 _Section(
@@ -245,6 +258,34 @@ class SettingsPage extends StatelessWidget {
                   ],
                 ),
                 if (kIsDesktop) const _PlayerSettings(),
+                if (defaultTargetPlatform == TargetPlatform.android)
+                  _Section(
+                    title: strings.playerSection,
+                    children: <Widget>[
+                      _dropdown<String>(
+                        icon: Icons.smart_display_rounded,
+                        label: strings.externalPlayerLabel,
+                        value: <String>['builtin', 'mpv', 'vlc']
+                                .contains(settings.externalPlayer)
+                            ? settings.externalPlayer
+                            : 'builtin',
+                        options: <(String, String)>[
+                          ('builtin', strings.externalBuiltin),
+                          ('mpv', 'mpv'),
+                          ('vlc', 'VLC'),
+                        ],
+                        onChanged: (value) =>
+                            unawaited(state.setExternalPlayer(value)),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        strings.externalPlayerHelp,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colors.subtext0,
+                            ),
+                      ),
+                    ],
+                  ),
                 _Section(
                   title: strings.audioAndSubtitles,
                   children: <Widget>[

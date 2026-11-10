@@ -146,6 +146,19 @@ extension PlayerStrings on AppStrings {
   String get pipHelp => isArabic
       ? 'عند الخروج من التطبيق أثناء المشاهدة يستمر الفيديو في نافذة صغيرة عائمة.'
       : 'Leaving the app while watching keeps the video in a small floating window.';
+  String get externalPlayerLabel => isArabic ? 'المشغّل' : 'Player';
+  String get externalBuiltin => isArabic ? 'مشغّل التطبيق' : 'Built-in player';
+  String get externalPlayerHelp => isArabic
+      ? 'افتح القنوات في تطبيق mpv أو VLC المثبّت على جهازك بدل المشغّل المدمج.'
+      : 'Open channels in the mpv or VLC app installed on this device instead of the built-in player.';
+  String externalMissing(String app) => isArabic
+      ? 'تطبيق $app غير مثبّت، سيتم استخدام المشغّل المدمج.'
+      : '$app is not installed. Using the built-in player.';
+  String get guideThumbsLabel =>
+      isArabic ? 'صور البرامج في الجدول' : 'Programme pictures in the timeline';
+  String get guideThumbsHelp => isArabic
+      ? 'تُظهر صورة صغيرة للبرنامج داخل خانته في الجدول إن وُجدت.'
+      : 'Show a small picture inside each programme cell when the guide has one.';
   String get pipLabel => isArabic ? 'نافذة عائمة عند الخروج' : 'Floating window on leave';
   String secondsShort(int n) => isArabic ? '$n ثانية' : '$n s';
   String get uiScaleHelp => isArabic

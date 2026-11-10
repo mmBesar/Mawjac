@@ -13,6 +13,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/app_info.dart';
 import '../core/bidi.dart';
+import '../core/external_player.dart';
 import '../core/network_image.dart';
 import '../core/pip.dart';
 import '../core/platform.dart';
@@ -39,7 +40,29 @@ import 'widgets/wave.dart';
 Future<void> openPlayer(BuildContext context, Channel channel) async {
   final state = context.read<AppState>();
   final navigator = Navigator.of(context);
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final strings = context.strings;
   Widget page = PlayerPage(channel: channel);
+  final app = Platform.isAndroid
+      ? ExternalApp.byName(state.settings.externalPlayer)
+      : null;
+  if (app != null) {
+    final result = await ExternalPlayer.launch(
+      app: app,
+      url: channel.url,
+      title: channel.name,
+    );
+    if (result == ExternalResult.opened) {
+      unawaited(state.markWatched(channel));
+      return;
+    }
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(strings.externalMissing(app.label)),
+        duration: const Duration(seconds: 6),
+      ),
+    );
+  }
   if (kIsDesktop && state.settings.useMpvWindow) {
     MpvRuntime.useCustomPath(state.settings.mpvPath);
     final capabilities = await MpvRuntime.capabilities();

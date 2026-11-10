@@ -98,6 +98,9 @@ def patch_android_manifest() -> None:
 MAIN_ACTIVITY = """package com.mmbesar.mawjac
 
 import android.app.PictureInPictureParams
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.util.Rational
 import io.flutter.embedding.android.FlutterActivity
@@ -123,6 +126,39 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+        // Hand a stream to another player app (mpv, VLC).
+        val external = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mawjac/external")
+        external.setMethodCallHandler { call, result ->
+            if (call.method == "launch") {
+                val url = call.argument<String>("url")
+                val pkg = call.argument<String>("package")
+                val title = call.argument<String>("title") ?: ""
+                if (url == null || pkg == null) {
+                    result.success("error")
+                } else {
+                    result.success(launchExternal(url, pkg, title))
+                }
+            } else {
+                result.notImplemented()
+            }
+        }
+    }
+
+    private fun launchExternal(url: String, pkg: String, title: String): String {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(Uri.parse(url), "video/*")
+                setPackage(pkg)
+                putExtra("title", title)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            "ok"
+        } catch (e: ActivityNotFoundException) {
+            "missing"
+        } catch (e: Exception) {
+            "error"
         }
     }
 

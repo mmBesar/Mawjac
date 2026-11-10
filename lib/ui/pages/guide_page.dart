@@ -16,6 +16,7 @@ import '../player_page.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/page_search.dart';
+import '../widgets/programme_poster.dart';
 import '../widgets/programme_sheet.dart';
 import '../widgets/warnings_panel.dart';
 import 'channel_guide_page.dart';
@@ -479,6 +480,8 @@ class _GuidePageState extends State<GuidePage> {
             match: needle.isNotEmpty && _matches(programme, needle),
             dim: needle.isNotEmpty && !_matches(programme, needle),
             live: programme.isLiveAt(state.now),
+            thumbnails: state.settings.guideThumbnails,
+            allowInsecure: state.activeSource?.allowInsecureCerts ?? false,
             range: strings.formatRange(
               programme.start,
               programme.stop,
@@ -678,12 +681,18 @@ class _Block extends StatelessWidget {
     required this.blockWidth,
     required this.scroll,
     required this.viewport,
+    this.thumbnails = false,
+    this.allowInsecure = false,
     this.match = false,
     this.dim = false,
   });
 
   final Programme programme;
   final bool live;
+
+  /// Show the programme's picture at the start of wide enough bars.
+  final bool thumbnails;
+  final bool allowInsecure;
   final String range;
   final VoidCallback onTap;
 
@@ -739,6 +748,10 @@ class _Block extends StatelessWidget {
                   return const SizedBox.expand();
                 }
                 final roomy = span >= 120;
+                final thumb = thumbnails &&
+                    programme.iconUrl != null &&
+                    programme.iconUrl!.isNotEmpty &&
+                    span >= 280;
                 return Stack(
                   children: <Widget>[
                     Positioned(
@@ -751,7 +764,19 @@ class _Block extends StatelessWidget {
                           horizontal: 10,
                           vertical: 6,
                         ),
-                        child: Column(
+                        child: Row(
+                          children: <Widget>[
+                            if (thumb) ...<Widget>[
+                              ProgrammePoster(
+                                programme: programme,
+                                allowInsecure: allowInsecure,
+                                width: 92,
+                                height: 52,
+                                radius: 8,
+                              ),
+                              const SizedBox(width: 10),
+                            ],
+                            Expanded(child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
@@ -787,6 +812,9 @@ class _Block extends StatelessWidget {
                                   ],
                                 ),
                               ),
+                          ],
+                        ),
+                          ),
                           ],
                         ),
                       ),

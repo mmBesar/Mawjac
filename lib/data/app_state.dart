@@ -202,6 +202,12 @@ class AppState extends ChangeNotifier {
   Future<void> setPipOnLeave(bool value) =>
       updateSettings(_settings.copyWith(pipOnLeave: value));
 
+  Future<void> setExternalPlayer(String value) =>
+      updateSettings(_settings.copyWith(externalPlayer: value));
+
+  Future<void> setGuideThumbnails(bool value) =>
+      updateSettings(_settings.copyWith(guideThumbnails: value));
+
   Future<void> setZapBanner(bool value) =>
       updateSettings(_settings.copyWith(zapBanner: value));
 

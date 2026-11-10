@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+- Android: optional external player. Settings -> Player: built-in, mpv or VLC. If the app is missing, Mawjac says so and uses the built-in player. (Desktop already has "Use system mpv".)
+- Navigation: tapping a tab no longer runs through the pages in between; far tabs fade, neighbours slide. Fixes Settings opening Favorites on a fresh start.
+- Guide: optional programme pictures inside the timeline cells (Settings -> Display).
+- Audit: removed a double dispose; added tests for the date formatting and the new settings; added docs/PROJECT_NOTES.md and AGENTS.md as a hand-off for the next developer.
+
 ## 0.5.4
 
 - Desktop: the channel list and EPG panels sit higher so they no longer cover the bottom control bar.

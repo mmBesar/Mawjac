@@ -468,6 +468,8 @@ class AppSettings {
     this.channelView = 'cards',
     this.pipOnLeave = true,
     this.guideScale = 0,
+    this.externalPlayer = 'builtin',
+    this.guideThumbnails = false,
   });
 
   factory AppSettings.defaults() => const AppSettings(
@@ -527,6 +529,12 @@ class AppSettings {
   /// Extra zoom for the Guide only; 0 picks one for the screen.
   final double guideScale;
 
+  /// Android: `builtin`, `mpv` or `vlc` (hand the stream to that app).
+  final String externalPlayer;
+
+  /// Show a small programme picture in the guide's timeline cells.
+  final bool guideThumbnails;
+
   /// Open the mpv window fullscreen.
   final bool startFullscreen;
 
@@ -563,6 +571,8 @@ class AppSettings {
     String? channelView,
     bool? pipOnLeave,
     double? guideScale,
+    String? externalPlayer,
+    bool? guideThumbnails,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -591,6 +601,8 @@ class AppSettings {
       channelView: channelView ?? this.channelView,
       pipOnLeave: pipOnLeave ?? this.pipOnLeave,
       guideScale: guideScale ?? this.guideScale,
+      externalPlayer: externalPlayer ?? this.externalPlayer,
+      guideThumbnails: guideThumbnails ?? this.guideThumbnails,
     );
   }
 
@@ -618,6 +630,8 @@ class AppSettings {
         'channelView': channelView,
         'pipOnLeave': pipOnLeave,
         'guideScale': guideScale,
+        'externalPlayer': externalPlayer,
+        'guideThumbnails': guideThumbnails,
         'settingsVersion': 2,
       };
 
@@ -668,6 +682,8 @@ class AppSettings {
       channelView: json['channelView'] as String? ?? 'cards',
       pipOnLeave: json['pipOnLeave'] as bool? ?? true,
       guideScale: (json['guideScale'] as num?)?.toDouble() ?? 0,
+      externalPlayer: json['externalPlayer'] as String? ?? 'builtin',
+      guideThumbnails: json['guideThumbnails'] as bool? ?? false,
     );
   }
 }
