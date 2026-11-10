@@ -102,6 +102,11 @@ Changes are listed in the [CHANGELOG](CHANGELOG.md).
 - **No affiliation.** Not affiliated with or endorsed by Tunarr, ErsatzTV, mpv,
   Tvheadend, Flutter, Catppuccin or any broadcaster or provider. Names are used
   only to describe compatibility.
+- **Built with AI assistance.** Mawjac is developed by me with the help of an
+  AI coding assistant (Claude, by Anthropic). I direct the work, test it on my
+  own devices and decide what ships, but much of the code was written or
+  refactored by the assistant and may contain mistakes a human would not make.
+  Treat it accordingly.
 - **No warranty.** Provided "as is", without warranty of any kind, as stated in
   the licence. Use it at your own risk.
 - **Privacy.** Mawjac has no accounts, analytics or telemetry. It connects only to
