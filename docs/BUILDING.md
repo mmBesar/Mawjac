@@ -180,17 +180,16 @@ To cut a release:
 2. Add a `CHANGELOG.md` entry.
 3. Commit and push to `main`, and wait for the Build run to go green. With the
    signing secrets set, that run already produces the release-signed APK.
-4. Publish, either way:
-   - From git: `git tag v0.5.4 && git push origin v0.5.4`. The Release workflow
-     finds the green Build run for that exact commit and publishes it. If the
-     commit has no green build it stops with an error; it never rebuilds.
-   - From GitHub: Actions -> Release -> Run workflow (or
-     `gh workflow run release.yml`). Empty fields publish the latest green
-     build on `main`; or give a run id and tag.
-
-   Either way it refuses a debug-signed APK, adds `SHA256SUMS` and creates a
-   pre-release (untick the box in the web form for a normal release, or edit it
-   on the Releases page afterwards).
+4. Publish: `git tag -a v0.6.2 -m "Mawjac 0.6.2" && git push origin v0.6.2`.
+   The Release workflow finds the green Build run for that exact commit, checks
+   that every file is there (APK, DEB, RPM and AppImage for amd64 and arm64),
+   refuses a debug-signed APK, adds `SHA256SUMS` and creates the release. A
+   plain tag (`v0.6.2`) becomes the **latest** release; only a tag with a suffix
+   (`v0.7.0-beta1`) is a pre-release. If the commit has no complete green build,
+   it starts a new Build on the tag, waits for it and releases only if that is
+   green. It can also be started by hand (Actions -> Release -> Run workflow, with
+   the tag). The workflow file that runs is the one in the tagged commit, so push
+   the commit that contains it to `main` before tagging.
 
 ### Signing the Android APK
 

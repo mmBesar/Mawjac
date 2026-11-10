@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2
+
+- Release workflow: a plain tag such as `v0.6.2` now creates the latest release, not a pre-release (only `-beta1`-style tags are pre-releases). It checks that every Linux and Android file exists, builds again if one is missing, and refuses a debug-signed APK.
+
 ## 0.6.1
 
 - Fix the new settings test (it built AppSettings without its required fields).

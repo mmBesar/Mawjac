@@ -70,7 +70,9 @@ the other way round. See "Sync with MawjTVH".
   at least 280 px wide.
 - XMLTV `<date>` is shown through `Programme.displayDate`.
 - Releasing: push to main, wait for green Build, then
-  `git tag vX.Y.Z && git push origin vX.Y.Z` (or run the Release workflow).
+  `git tag -a vX.Y.Z -m "Mawjac X.Y.Z" && git push origin vX.Y.Z`. A plain tag is the latest
+  release; only a suffixed tag (-beta1) is a pre-release. The workflow and
+  `tool/check_release_files.sh` came from MawjTVH.
   Nothing is rebuilt; the APK is already release-signed by the Build run via
   the four `ANDROID_*` secrets.
 
@@ -97,3 +99,4 @@ XMLTV fields, mpv remote track sheet, AppStream, signing.
   AppSettings round trip, widget constructor arguments, subscription/timer
   disposal by script). Not compiled; CI must confirm.
 - 0.6.1: test fix (build AppSettings from `AppSettings.defaults()`, its constructor has required fields); README discloses AI assistance.
+- 0.6.2: release workflow replaced by MawjTVH's (plain tag = latest release, rebuild fallback, file check); refuses a debug-signed APK.

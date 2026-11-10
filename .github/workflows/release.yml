@@ -1,112 +1,148 @@
 name: Release
 
-# Publishes a GitHub release from the artifacts of a Build run that already
-# passed. Nothing is rebuilt: the APK was signed with the release key during
-# that build, so this only checks it, adds checksums and creates the release.
+# Publishes a release from the build that already ran for the tagged commit.
+# Nothing is rebuilt when that build has every file: the APK was signed in
+# that build, and the Linux bundles were packaged there, so tagging takes
+# seconds. When a file is missing (a Linux job failed, an artifact expired),
+# the release starts a new Build on the tag, waits for it, and publishes from
+# that instead of releasing an incomplete set.
 #
-# Two ways to start it, after the Build run for the commit has finished green:
-#   * git tag v0.5.4 && git push origin v0.5.4   (publishes that commit's build)
-#   * Actions -> Release -> Run workflow, or: gh workflow run release.yml
+#   git tag -a v0.6.2 -m "Mawjac 0.6.2" && git push origin v0.6.2
+#
+# The tagged commit must be one the Build workflow finished successfully on
+# (a push to main). Artifacts are kept for the repository's retention period
+# (90 days by default); after that, run Build again first.
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
-      run_id:
-        description: "Build run id to publish (empty: latest successful run on main)"
-        required: false
-        type: string
       tag:
-        description: "Release tag (empty: v + the version in the APK file name)"
+        description: "Tag to publish (for example v0.6.2)"
+        required: true
+      run_id:
+        description: "Build run to take the files from (optional; default: the successful run for the tag's commit)"
         required: false
-        type: string
-      prerelease:
-        description: "Mark as pre-release"
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: write
-  actions: read
+  actions: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   release:
     name: Publish release
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
-      - name: Find the build run
-        id: run
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Find the build for this commit
+        id: build
         env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ inputs.run_id }}
+          INPUT_RUN_ID: ${{ github.event.inputs.run_id }}
         run: |
-          if [ -z "$RUN_ID" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml \
-              --commit "$GITHUB_SHA" --status success --limit 1 \
-              --json databaseId --jq '.[0].databaseId')"
-            if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-              echo "::error::Commit $GITHUB_SHA has no successful Build run. Push it to main and wait for the build, then run Release again."
-              exit 1
+          set -euo pipefail
+          sha="$(git rev-list -n1 "$TAG")"
+          run_id="$INPUT_RUN_ID"
+          if [[ -z "$run_id" ]]; then
+            run_id="$(gh run list --workflow build.yml --commit "$sha" \
+              --status success --limit 1 --json databaseId \
+              --jq '.[0].databaseId // empty')"
+          fi
+          if [[ -z "$run_id" ]]; then
+            echo "::warning::No successful Build run for commit $sha; the next step builds it."
+          else
+            echo "Using Build run $run_id for $TAG ($sha)"
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download and check the build files
+        env:
+          RUN_ID: ${{ steps.build.outputs.run_id }}
+          PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          set -euo pipefail
+          # A tag may carry a suffix (v0.2.0-beta1); the files are named after
+          # the version in pubspec.yaml, without it.
+          version="${TAG#v}"
+          version="${version%%-*}"
+          arm=()
+          if [[ "$PRIVATE" == "true" ]]; then
+            arm=(--no-arm64)
+          fi
+
+          collect() {
+            rm -rf release release-raw
+            mkdir release
+            gh run download "$1" --dir release-raw || true
+            if [[ -d release-raw ]]; then
+              find release-raw -type f -exec mv -t release {} +
             fi
+            ls -l release
+          }
+
+          if [[ -n "$RUN_ID" ]]; then
+            collect "$RUN_ID"
+            if tool/check_release_files.sh release "$version" "${arm[@]}"; then
+              exit 0
+            fi
+            echo "::warning::Build run $RUN_ID is missing files; building $TAG again."
           fi
-          if [ -z "$RUN_ID" ]; then
-            RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml \
-              --branch main --status success --limit 1 \
-              --json databaseId --jq '.[0].databaseId')"
-          fi
-          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-            echo "::error::No successful Build run found on main."
+          before="$(gh run list --workflow build.yml --event workflow_dispatch \
+            --branch "$TAG" --limit 1 --json databaseId \
+            --jq '.[0].databaseId // 0')"
+          gh workflow run build.yml --ref "$TAG"
+          new=""
+          for _ in $(seq 1 30); do
+            sleep 10
+            latest="$(gh run list --workflow build.yml \
+              --event workflow_dispatch --branch "$TAG" --limit 1 \
+              --json databaseId --jq '.[0].databaseId // 0')"
+            if [[ "$latest" -gt "$before" ]]; then
+              new="$latest"
+              break
+            fi
+          done
+          if [[ -z "$new" ]]; then
+            echo "::error::Could not start a new Build for $TAG."
             exit 1
           fi
-          sha="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json headSha,conclusion \
-            --jq 'select(.conclusion == "success") | .headSha')"
-          if [ -z "$sha" ]; then
-            echo "::error::Build run $RUN_ID did not succeed."
-            exit 1
-          fi
-          echo "id=$RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "Publishing run $RUN_ID at $sha"
+          echo "Waiting for Build run $new"
+          gh run watch "$new" --interval 30 --exit-status || true
 
-      - name: Download the build artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p dl release
-          gh run download "${{ steps.run.outputs.id }}" --repo "$GITHUB_REPOSITORY" --dir dl
-          find dl -type f -exec mv -t release {} +
-          ls -l release
-
-      - name: Check the files
-        run: |
-          shopt -s nullglob
-          apks=(release/Mawjac-*-arm64-v8a.apk)
-          [ ${#apks[@]} -eq 1 ] || { echo "::error::Expected exactly one APK."; exit 1; }
-          appimages=(release/Mawjac-*.AppImage)
-          [ ${#appimages[@]} -ge 1 ] || { echo "::error::No AppImage found."; exit 1; }
-          if keytool -printcert -jarfile "${apks[0]}" | grep -q "Android Debug"; then
-            echo "::error::The APK is signed with the debug key. Set the signing secrets and rebuild."
+          # The jobs of a Build do not depend on each other, so the files can
+          # exist even when the tests or the analysis failed. Never release
+          # from a Build that is not green.
+          conclusion="$(gh run view "$new" --json conclusion --jq .conclusion)"
+          if [[ "$conclusion" != "success" ]]; then
+            echo "::error::Build run $new ended as '$conclusion'. Nothing was released."
             exit 1
           fi
 
-      - name: Work out the tag
-        id: tag
-        env:
-          TAG: ${{ inputs.tag }}
+          collect "$new"
+          if ! tool/check_release_files.sh release "$version" "${arm[@]}"; then
+            echo "::error::The new build is still incomplete. Nothing was released; look at the failed jobs of run $new."
+            exit 1
+          fi
+
+      - name: Refuse a debug-signed APK
         run: |
-          if [ -z "$TAG" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            TAG="$GITHUB_REF_NAME"
+          apk="$(ls release/Mawjac-*-arm64-v8a.apk)"
+          if keytool -printcert -jarfile "$apk" | grep -q "Android Debug"; then
+            echo "::error::The APK is signed with the debug key. Check the signing secrets and build again."
+            exit 1
           fi
-          if [ -z "$TAG" ]; then
-            apk="$(ls release/Mawjac-*-arm64-v8a.apk)"
-            version="$(basename "$apk" | sed 's/^Mawjac-\(.*\)-arm64-v8a\.apk$/\1/')"
-            TAG="v$version"
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Tag: $TAG"
 
       - name: Write checksums
         run: |
@@ -115,19 +151,14 @@ jobs:
             | sort | xargs -r sha256sum > SHA256SUMS
           cat SHA256SUMS
 
-      - name: Create the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.tag.outputs.tag }}
-          SHA: ${{ steps.run.outputs.sha }}
-          PRERELEASE: ${{ inputs.prerelease }}
+      - name: Create GitHub release
         run: |
-          flags=()
-          # Tag pushes have no inputs; a pre-release is the safe default.
-          if [ "$PRERELEASE" != "false" ]; then flags+=(--prerelease); fi
+          set -euo pipefail
+          # A plain tag such as v0.6.3 becomes the "latest" release. Only a tag
+          # with a suffix (v0.2.0-beta1, v0.2.0-rc1) is marked as a pre-release.
+          flag=(--latest)
+          if [[ "$TAG" == *-* ]]; then
+            flag=(--prerelease)
+          fi
           gh release create "$TAG" release/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$SHA" \
-            --title "Mawjac $TAG" \
-            --generate-notes \
-            "${flags[@]}"
+            --title "$TAG" --generate-notes --verify-tag "${flag[@]}"
