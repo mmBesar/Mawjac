@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1
+
+- Fix the new settings test (it built AppSettings without its required fields).
+- README states that the project is built with AI assistance.
+
 ## 0.6.0
 
 - Android: optional external player. Settings -> Player: built-in, mpv or VLC. If the app is missing, Mawjac says so and uses the built-in player. (Desktop already has "Use system mpv".)

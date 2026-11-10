@@ -29,7 +29,7 @@ void main() {
 
   group('AppSettings new fields', () {
     test('round trip', () {
-      const settings = AppSettings(
+      final settings = AppSettings.defaults().copyWith(
         externalPlayer: 'vlc',
         guideThumbnails: true,
       );
@@ -38,7 +38,10 @@ void main() {
       expect(back.guideThumbnails, isTrue);
     });
     test('defaults when missing', () {
-      final back = AppSettings.fromJson(<String, dynamic>{});
+      final json = AppSettings.defaults().toJson()
+        ..remove('externalPlayer')
+        ..remove('guideThumbnails');
+      final back = AppSettings.fromJson(json);
       expect(back.externalPlayer, 'builtin');
       expect(back.guideThumbnails, isFalse);
     });

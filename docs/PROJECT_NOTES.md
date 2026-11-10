@@ -96,3 +96,4 @@ XMLTV fields, mpv remote track sheet, AppStream, signing.
   guide thumbnails; audit (removed a double dispose in app_shell; checked
   AppSettings round trip, widget constructor arguments, subscription/timer
   disposal by script). Not compiled; CI must confirm.
+- 0.6.1: test fix (build AppSettings from `AppSettings.defaults()`, its constructor has required fields); README discloses AI assistance.
